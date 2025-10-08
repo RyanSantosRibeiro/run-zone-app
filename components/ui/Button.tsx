@@ -1,4 +1,5 @@
-import React from "react";
+import { colors } from "@/hooks/use-theme-color";
+import React, { ReactElement } from "react";
 import {
   Text,
   TouchableOpacity,
@@ -16,6 +17,7 @@ interface ButtonProps extends TouchableOpacityProps {
   variant?: ButtonVariant;
   disabled?: boolean;
   loading?: boolean;
+  icon: ReactElement;
   style?: ViewStyle | ViewStyle[];
   textStyle?: TextStyle | TextStyle[];
 }
@@ -27,6 +29,7 @@ export default function Button({
   loading = false,
   style,
   textStyle,
+  icon,
   ...rest
 }: ButtonProps) {
   // Define estilos base e por variante
@@ -56,9 +59,12 @@ export default function Button({
       {...rest}
     >
       {loading ? (
-        <ActivityIndicator color={variant === "outline" ? "#3b82f6" : "#fff"} />
+        <ActivityIndicator color={variant === "outline" ? colors.primary : "#fff"} />
       ) : (
+        <>
+        {icon}
         <Text style={textStyles}>{title}</Text>
+        </>
       )}
     </TouchableOpacity>
   );
@@ -71,9 +77,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
+    flexDirection: "row",
+    gap: 8
   },
   primary: {
-    backgroundColor: "#3b82f6",
+    backgroundColor: colors.primary,
   },
   secondary: {
     backgroundColor: "#6b7280",
@@ -81,7 +89,7 @@ const styles = StyleSheet.create({
   outline: {
     backgroundColor: "transparent",
     borderWidth: 2,
-    borderColor: "#3b82f6",
+    borderColor: colors.primary,
   },
   disabled: {
     backgroundColor: "#d1d5db",
@@ -90,15 +98,19 @@ const styles = StyleSheet.create({
   textBase: {
     fontSize: 16,
     fontWeight: "600",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: "8px"
   },
   textPrimary: {
-    color: "#fff",
+    color: colors.primaryForeground,
   },
   textSecondary: {
     color: "#fff",
   },
   textOutline: {
-    color: "#3b82f6",
+    color: colors.primary,
   },
   textDisabled: {
     color: "#9ca3af",

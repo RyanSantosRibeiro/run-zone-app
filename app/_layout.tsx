@@ -23,7 +23,7 @@ export default function RootLayout() {
           {/* Navegação para a stack de configurações */}
           <Stack.Screen
             name="settings"
-            options={{ title: "Configurações 3", headerShown: false }}
+            options={{ title: "Configurações", headerShown: false }}
           />
         </Stack>
         <StatusBar style="auto" />

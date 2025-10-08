@@ -8,13 +8,21 @@ import { ThemedView } from '@/components/themed-view';
 import { Link, router, useNavigation } from 'expo-router';
 import { useLayoutEffect } from 'react';
 import Button from '@/components/ui/Button';
+import { HeaderTitle } from '@react-navigation/elements';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
 
   useLayoutEffect(() => {
   navigation.setOptions({
-    title: '🏠 Home',
+    headerTitle: "",
+    headerLeft: () => (
+      <Image
+        source={require('@/assets/images/logo.png')}
+        style={{ width: 120, height: 40 }}
+        contentFit="contain"
+      />
+    ),
     headerRight: () => (
       <Button title="Config" onPress={() => router.push('/settings')} />
     ),
