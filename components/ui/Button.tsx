@@ -17,7 +17,7 @@ interface ButtonProps extends TouchableOpacityProps {
   variant?: ButtonVariant;
   disabled?: boolean;
   loading?: boolean;
-  icon: ReactElement;
+  icon?: ReactElement;
   style?: ViewStyle | ViewStyle[];
   textStyle?: TextStyle | TextStyle[];
 }
@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   secondary: {
-    backgroundColor: "#6b7280",
+    backgroundColor: colors.secondary,
   },
   outline: {
     backgroundColor: "transparent",
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     color: colors.primaryForeground,
   },
   textSecondary: {
-    color: "#fff",
+    color: colors.secondaryForeground,
   },
   textOutline: {
     color: colors.primary,

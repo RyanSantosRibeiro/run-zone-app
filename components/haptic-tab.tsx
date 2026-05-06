@@ -50,7 +50,7 @@ export function HapticTab(props: BottomTabBarButtonProps & { label?: string }) {
         style={{
           fontWeight: 600,
           fontSize: 12,
-          color: isPrincipal ? colors.primaryForeground : focused ? '#B2FF00' : '#666',
+          color: isPrincipal ? colors.primaryForeground : focused ? isDark ? '#B2FF00' : colors.primaryForeground : '#666',
           lineHeight: 14,
         }}
       >

@@ -1,21 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import MapView, {
-  Polygon,
-  PROVIDER_DEFAULT,
-  PROVIDER_GOOGLE,
-} from "react-native-maps";
+import MapView, { Polygon, PROVIDER_GOOGLE } from "react-native-maps";
 import Fontisto from "@expo/vector-icons/Fontisto";
 
-import { Collapsible } from "@/components/ui/collapsible";
-import { ExternalLink } from "@/components/external-link";
-import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Fonts } from "@/constants/theme";
 import * as Location from "expo-location";
 import { customMapStyle } from "@/styles/Map";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNavigation } from "@react-navigation/native";
+import { router } from "expo-router";
+import Map from "@/components/map";
 
 export default function RunScreen() {
   const [region, setRegion] = useState<{
@@ -28,8 +23,8 @@ export default function RunScreen() {
     latitude: number;
     longitude: number;
   } | null>(null); // Estado para armazenar a localização do usuário
-  const [hexagons, setHexagons] = useState<null | any>(null);
-  const { startRun, fetchHexagons } = useAuth();
+  const { startRun, fetchHexagons, user } = useAuth();
+  const [hexagons, setHexagons] = useState<any | null>(null);
 
   useEffect(() => {
     if (!navigator) return;
@@ -42,8 +37,8 @@ export default function RunScreen() {
         setRegion({
           latitude,
           longitude,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005,
         });
       },
       (error) => alert(error.message), // Em caso de erro
@@ -53,7 +48,6 @@ export default function RunScreen() {
 
   // Pega Localização
   useEffect(() => {
-
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
@@ -73,7 +67,6 @@ export default function RunScreen() {
 
   useEffect(() => {
     const handleFetchHexagons = async () => {
-      console.log("Buscando Fetch Hex");
       const data = await fetchHexagons(); // Chama a função manualmente quando necessário
       setHexagons(data);
     };
@@ -82,41 +75,74 @@ export default function RunScreen() {
     }
   }, [hexagons, fetchHexagons]);
 
-  if (!region || !location) {
+  if (!region || !location || !user) {
     return <Text>Carregando mapa...</Text>;
   }
+
+  const handleStartRun = () => {
+    // Aqui você pode iniciar a corrida (se necessário) e então navegar
+    startRun(); // Começa a corrida
+    router.push("/run");
+  };
 
   return (
     <ThemedView style={{ flex: 1 }}>
       {/* Mapa ocupando toda a tela */}
-      <MapView
+      {/* <MapView
         style={styles.map}
-        region={region}
+        // region={region}
         showsUserLocation
         followsUserLocation
         provider={PROVIDER_GOOGLE}
         customMapStyle={customMapStyle}
+        pitchEnabled
+        // cameraZoomRange={{
+        //   minCenterCoordinateDistance: 18,
+        //   maxCenterCoordinateDistance: 20,
+        // }}
+        initialCamera={{
+          center: region,
+          pitch: 50, // Inclinação do mapa (em graus)
+          zoom: 15,
+          heading: 0, // Orientação da câmera (em graus) 
+          // altitude: 150, // Distância da câmera em relação ao mapa
+        }}
       >
-        {/* {hexagons.map((hexagon: any, key: number) => {
-          const { color, h3_hash } = hexagon; // Supondo que o objeto `polygon` contenha as coordenadas
-          const boundary = cellToBoundary(h3_hash, true);
-          // const coordinates = boundary.map(([lat, lng]) => [lng, lat]);
-          console.log({ boundary, color });
+        {hexagons?.map(({ boundary }: { boundary: any }, key: number) => {
+          const parsedBoundary = boundary.map(
+            ([lng, lat]: [number, number]) => ({
+              latitude: lat,
+              longitude: lng,
+            })
+          );
 
-          // // Verifique se o campo "polygon" contém as coordenadas geográficas
-          // if (coordinates && Array.isArray(coordinates)) {
-          //   return <View key={key} style={styles.floatingContent}></View>;
-          // }
+          if (!parsedBoundary || parsedBoundary.length === 0) {
+            return <Text key={key}>Carregando mapa...</Text>;
+          }
 
-          return <Text key={key}>Carregando mapa...</Text>;
-        })} */}
-      </MapView>
+          // return null;
+
+          return (
+            <Polygon
+              key={key}
+              coordinates={parsedBoundary}
+              strokeColor={`${user?.profile?.color}`}
+              fillColor={`${user?.profile?.color}30`}
+              strokeWidth={2}
+            />
+          );
+        })}
+      </MapView> */}
+
+      <View style={styles.map}>
+        <Map hexagons={hexagons} zoom={hexagons?.length > 20 ? 15 : 16} />
+      </View>
 
       {/* Conteúdo flutuando sobre o mapa na parte inferior */}
       <View style={styles.floatingContent}>
         <Button
           title="Iniciar Corrida"
-          onPress={() => startRun()}
+          onPress={handleStartRun}
           icon={<Fontisto name="flash" size={24} color="black" />}
         />
       </View>
@@ -143,5 +169,18 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     flexDirection: "row",
     gap: 8,
+  },
+  statsBox: {
+    position: "absolute",
+    top: 40,
+    left: 16,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    padding: 12,
+    borderRadius: 8,
+  },
+  statText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
 });

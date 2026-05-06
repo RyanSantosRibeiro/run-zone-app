@@ -1,27 +1,33 @@
-import React, { useEffect, useState } from 'react';
-import { Platform, StyleSheet, Text } from 'react-native';
-import MapView, { Marker } from 'react-native-maps'; // Importando o MapView
+import React, { useEffect, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import MapView, { Polygon, PROVIDER_GOOGLE } from "react-native-maps";
+import Fontisto from "@expo/vector-icons/Fontisto";
 
-import { Collapsible } from '@/components/ui/collapsible';
-import { ExternalLink } from '@/components/external-link';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
-import * as Location from 'expo-location';
-import { customMapStyle, customMapStyleDark } from '@/styles/Map';
-import { useColorScheme } from '@/hooks/use-color-scheme.web';
+import { ThemedView } from "@/components/themed-view";
+import * as Location from "expo-location";
+import { customMapStyle } from "@/styles/Map";
+import Button from "@/components/ui/Button";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigation } from "@react-navigation/native";
+import { router } from "expo-router";
+import Map from "@/components/map";
 
-
-
-export default function TabTwoScreen() {
-  const colorScheme = useColorScheme();
-  const [region, setRegion] = useState<{ latitude:number, longitude:  number, latitudeDelta: number, longitudeDelta: number } | null>(null); // Estado para armazenar a região do mapa
-  const [location, setLocation] = useState<{ latitude:number, longitude:  number } | null>(null); // Estado para armazenar a localização do usuário
-  const isDark = colorScheme === "dark"
+export default function ExploreScreen() {
+  const [region, setRegion] = useState<{
+    latitude: number;
+    longitude: number;
+    latitudeDelta: number;
+    longitudeDelta: number;
+  } | null>(null); // Estado para armazenar a região do mapa
+  const [location, setLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null); // Estado para armazenar a localização do usuário
+  const { startRun, fetchHexagons, user } = useAuth();
+  const [hexagons, setHexagons] = useState<any | null>(null);
 
   useEffect(() => {
-    if(!navigator) return;
+    if (!navigator) return;
     // Função para obter a localização atual do usuário
     navigator?.geolocation?.getCurrentPosition(
       (position) => {
@@ -31,8 +37,8 @@ export default function TabTwoScreen() {
         setRegion({
           latitude,
           longitude,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005,
         });
       },
       (error) => alert(error.message), // Em caso de erro
@@ -40,87 +46,141 @@ export default function TabTwoScreen() {
     );
   }, []); // O hook será executado uma vez quando o componente for montado
 
+  // Pega Localização
   useEffect(() => {
-  (async () => {
-    let { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      alert('Permissão de localização negada!');
-      return;
-    }
-    let location = await Location.getCurrentPositionAsync({});
-    setLocation(location.coords);
-    setRegion({
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-      latitudeDelta: 0.0922,
-      longitudeDelta: 0.0421,
-    });
-  })();
-}, []);
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        alert("Permissão de localização negada!");
+        return;
+      }
+      let location = await Location.getCurrentPositionAsync({});
+      setLocation(location.coords);
+      setRegion({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+    })();
+  }, []);
 
-  if (!region || !location) {
-    return <Text>Carregando mapa...</Text>; // Exibe uma mensagem enquanto a localização não é carregada
+  useEffect(() => {
+    const handleFetchHexagons = async () => {
+      const data = await fetchHexagons(); // Chama a função manualmente quando necessário
+      setHexagons(data);
+    };
+    if (hexagons === null) {
+      handleFetchHexagons();
+    }
+  }, [hexagons, fetchHexagons]);
+
+  if (!region || !location || !user) {
+    return <Text>Carregando mapa...</Text>;
   }
+
+  const handleStartRun = () => {
+    // Aqui você pode iniciar a corrida (se necessário) e então navegar
+    startRun(); // Começa a corrida
+    router.push("/run");
+  };
+
   return (
     <ThemedView style={{ flex: 1 }}>
-      <MapView
+      {/* Mapa ocupando toda a tela */}
+      {/* <MapView
         style={styles.map}
-        initialRegion={region} // Passa a região inicial com as coordenadas obtidas
-        region={region} // Mantém a região atualizada conforme a mudança
-        showsUserLocation={true} // Exibe a localização do usuário no mapa
-        followsUserLocation={true} // Faz o mapa seguir o movimento do usuário
-        customMapStyle={isDark ? customMapStyleDark : customMapStyle}  // Aplicando o estilo personalizado
+        // region={region}
+        showsUserLocation
+        followsUserLocation
+        provider={PROVIDER_GOOGLE}
+        customMapStyle={customMapStyle}
+        pitchEnabled
+        // cameraZoomRange={{
+        //   minCenterCoordinateDistance: 18,
+        //   maxCenterCoordinateDistance: 20,
+        // }}
+        initialCamera={{
+          center: region,
+          pitch: 50, // Inclinação do mapa (em graus)
+          zoom: 12,
+          heading: 0, // Orientação da câmera (em graus) 
+          // altitude: 150, // Distância da câmera em relação ao mapa
+        }}
       >
-        {/* Marcador para a localização do usuário */}
-        {/* <Marker coordinate={location} title="Minha Localização" /> */}
-      </MapView>
+        {hexagons?.map(({ boundary }: { boundary: any }, key: number) => {
+          const parsedBoundary = boundary.map(
+            ([lng, lat]: [number, number]) => ({
+              latitude: lat,
+              longitude: lng,
+            })
+          );
 
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}
-        >
-          Explore
-        </ThemedText>
-      </ThemedView>
+          if (!parsedBoundary || parsedBoundary.length === 0) {
+            return <Text key={key}>Carregando mapa...</Text>;
+          }
 
-      <ThemedText>Explore os pontos turísticos de São Paulo.</ThemedText>
+          // return null;
 
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          Este app tem dois arquivos de tela:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> e{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          O layout do arquivo{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          configura o navegador de abas.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Aprenda mais</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, e suporte à web">
-        <ThemedText>
-          Você pode abrir este projeto no Android, iOS e na web. Para abrir a versão web, pressione{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> no terminal.
-        </ThemedText>
-      </Collapsible>
+          return (
+            <Polygon
+              key={key}
+              coordinates={parsedBoundary}
+              strokeColor={`${user?.profile?.color}`}
+              fillColor={`${user?.profile?.color}30`}
+              strokeWidth={2}
+            />
+          );
+        })}
+      </MapView> */}
+
+      <View style={styles.map}>
+              <Map hexagons={hexagons} zoom={hexagons?.length > 20 ? 15 : 16} />
+            </View>
+
+      {/* Conteúdo flutuando sobre o mapa na parte inferior */}
+      <View style={styles.floatingContent}>
+        {/* <Button
+          title="Iniciar Corrida"
+          onPress={handleStartRun}
+          icon={<Fontisto name="flash" size={24} color="black" />}
+        /> */}
+      </View>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   map: {
-    width: '100%',
-    height: 400, // Ajuste a altura conforme necessário
+    ...StyleSheet.absoluteFillObject, // Mapa ocupa a tela inteira
+    zIndex: 0,
+  },
+  floatingContent: {
+    position: "absolute",
+    bottom: 20,
+    left: 0,
+    right: 0,
+    zIndex: 1,
+    padding: 16,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   titleContainer: {
-    padding: 16,
-    flexDirection: 'row',
+    marginBottom: 8,
+    flexDirection: "row",
     gap: 8,
+  },
+  statsBox: {
+    position: "absolute",
+    top: 40,
+    left: 16,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    padding: 12,
+    borderRadius: 8,
+  },
+  statText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
 });

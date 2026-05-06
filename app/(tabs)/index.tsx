@@ -1,119 +1,511 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Image } from "expo-image";
+import {
+  ActivityIndicator,
+  FlatList,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
+} from "react-native";
+import "react-native-gesture-handler";
+import "react-native-reanimated";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link, router, useNavigation } from 'expo-router';
-import { useLayoutEffect } from 'react';
-import Button from '@/components/ui/Button';
-import { HeaderTitle } from '@react-navigation/elements';
+import { HelloWave } from "@/components/hello-wave";
+import ParallaxScrollView from "@/components/parallax-scroll-view";
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
+import { Link, router, useNavigation } from "expo-router";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import Button from "@/components/ui/Button";
+import { HeaderTitle } from "@react-navigation/elements";
+import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
+import { colors } from "@/hooks/use-theme-color";
+import { useAuth } from "@/contexts/AuthContext";
+import Map from "@/components/map";
+import { formatTime } from "@/utils/run";
+import RecentAchievements from "@/components/RecentAchievements";
 
 export default function HomeScreen() {
-  const navigation = useNavigation();
+  const colorScheme = useColorScheme();
+  const bottomSheetRef = useRef<BottomSheet>(null);
+  const snapPoints = useMemo(() => ["42%", "60%"], []);
+  const isDark = colorScheme === "dark";
+  const [socialData, setSocialData] = useState<any | null>([]);
+  const [userData, setUserData] = useState<any | null>(null);
+  const [recordData, setRecordData] = useState<any | null>(null);
+  const [recentAchievements, setRecentAchievements] = useState<any | null>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false); // Para o pull-to-refresh
+  const [hasMore, setHasMore] = useState(true); // Para controle do infinite scroll
+  const [page, setPage] = useState(1); // Para controle de paginação
 
-  useLayoutEffect(() => {
-  navigation.setOptions({
-    headerTitle: "",
-    headerLeft: () => (
-      <Image
-        source={require('@/assets/images/logo.png')}
-        style={{ width: 120, height: 40 }}
-        contentFit="contain"
-      />
-    ),
-    headerRight: () => (
-      <Button title="Config" onPress={() => router.push('/settings')} />
-    ),
-  });
-}, [navigation]);
-  // Define o header da tela
+  const { fetchSocialFeed, fetchUserHex, user, fetchUserRecord, fetchUserRecentAchievements } = useAuth();
+
+  const handleSheetChanges = useCallback((index: number) => {
+    console.log("handleSheetChanges", index);
+  }, []);
+
+  useEffect(() => {
+    
+    const fetchRecentAchievements = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchUserRecentAchievements();
+        setRecentAchievements(data);
+      } catch (error) {
+        console.error("Erro ao buscar dados da corrida", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    const fetchHex = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchUserHex();
+        setUserData(data);
+      } catch (error) {
+        console.error("Erro ao buscar dados da corrida", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    const fetchRecord = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchUserRecord();
+        console.log({ record: data?.crossed_h3_ids?.length });
+        setRecordData(data);
+      } catch (error) {
+        console.error("Erro ao buscar dados da corrida", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRecord();
+    fetchRecentAchievements();
+    fetchHex();
+  }, [ fetchUserHex, fetchUserRecord, fetchUserRecentAchievements]);
+
+  const fetchSocial = useCallback(async (page:number) => {
+    try {
+      setLoading(true);
+      const data = await fetchSocialFeed(page);
+      if (data?.length === 0) {
+        setHasMore(false); // Quando não houver mais dados
+      }
+      setSocialData((prev) => [...prev, ...data]);
+    } catch (error) {
+      console.error("Erro ao buscar dados sociais", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [fetchSocialFeed])
+
+  // const handleRefresh = async () => {
+  //   setRefreshing(true);
+  //   setPage(1); // Resetar a página para recarregar tudo
+  //   setSocialData([]); // Limpar os dados antigos
+  //   await fetchSocial(1);
+  // };
+
+  // const handleLoadMore = async () => {
+  //   if (hasMore) {
+  //     setPage((prev) => prev + 1); // Incrementar a página
+  //     await fetchSocial(page + 1); // Carregar mais dados
+  //   }
+  // };
+
+  useEffect(() => {
+    if(socialData?.length <= 0) {
+      fetchSocial(page);
+    }
+  }, [page,fetchSocial,socialData]);
+
+  if (loading) {
+    return (
+      <ThemedView style={styles.center}>
+        <ActivityIndicator size="large" color="#00a86b" />
+      </ThemedView>
+    );
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
+    <ScrollView contentContainerStyle={{ paddingBottom: 200 }}>
+      <ThemedView style={styles.container}>
+        <View
+          style={{
+            paddingVertical: 16,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {user && (
+            <>
+              <ThemedText
+                style={{
+                  fontSize: 22,
+                  height: 24,
+                  lineHeight: 24,
+                  fontWeight: "600",
+                }}
+              >
+                Olá, {user?.profile?.full_name || ""}
+              </ThemedText>
+              <ThemedText
+                style={{
+                  fontSize: 12,
+                  height: 14,
+                  lineHeight: 14,
+                  fontWeight: "400",
+                  opacity: 0.5,
+                }}
+              >
+                Pronto para conquistar ?
+              </ThemedText>
+            </>
+          )}
+        </View>
+        {/* Resumo info */}
+        <ThemedView
+          style={styles.resumeContainer}
+          lightColor={colors.accent}
+          darkColor={colors.accentForeground}
+        >
+          <View
+            style={{ width: "50%", display: "flex", flexDirection: "column" }}
+          >
+            <ThemedText
+              style={{ fontSize: 14, fontWeight: "600", opacity: 0.8 }}
+            >
+              Território atual
+            </ThemedText>
+            <ThemedText
+              style={{
+                fontSize: 56,
+                lineHeight: 60,
+                fontWeight: "800",
+                height: 60,
+                fontStyle: "italic",
+              }}
+            >
+              {userData?.length || 0}
+            </ThemedText>
+            <ThemedText
+              style={{ fontSize: 12, opacity: 0.4, height: 14, lineHeight: 14 }}
+            >
+              {70 * 0.2 * userData?.length} calorias até agora
+            </ThemedText>
+          </View>
+          <View
+            style={{
+              width: "50%",
+              display: "flex",
+              flexDirection: "column",
+              height: "100%",
+              borderRadius: 8,
+              overflow: "hidden",
+            }}
+          >
+            <Map
+              zoom={13}
+              pitch={0}
+              hexagons={userData}
+              showUserLocation={false}
             />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+          </View>
+        </ThemedView>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
+        {/* Record info */}
+        { recordData && (
+          <ThemedView
+          style={styles.recordContainer}
+          lightColor={colors.foreground}
+          darkColor={colors.foreground}
+        >
+          <Text
+            style={{
+              fontSize: 14,
+              fontWeight: "600",
+              opacity: 0.8,
+              color: colors.accent,
+            }}
+          >
+            Recorde Semanal
+          </Text>
+          <View
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              justifyContent: "space-between",
+            }}
+          >
+            <View
+              style={{ width: "45%", display: "flex", flexDirection: "column" }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "600",
+                  opacity: 0.4,
+                  color: colors.accent,
+                }}
+              >
+                Tempo
+              </Text>
+              <Text
+                style={{
+                  fontSize: 26,
+                  lineHeight: 34,
+                  fontWeight: "800",
+                  height: 34,
+                  fontStyle: "italic",
+                  color: colors.accent,
+                }}
+              >
+                {formatTime(recordData?.duration)}
+              </Text>
+            </View>
+            <View
+              style={{ width: "25%", display: "flex", flexDirection: "column" }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "600",
+                  opacity: 0.4,
+                  color: colors.accent,
+                }}
+              >
+                Distância
+              </Text>
+              <Text
+                style={{
+                  fontSize: 26,
+                  lineHeight: 34,
+                  fontWeight: "800",
+                  height: 34,
+                  fontStyle: "italic",
+                  color: colors.accent,
+                }}
+              >
+                {recordData?.distance}
+              </Text>
+            </View>
+            <View
+              style={{ width: "20%", display: "flex", flexDirection: "column" }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "600",
+                  opacity: 0.4,
+                  color: colors.accent,
+                }}
+              >
+                Hexagons
+              </Text>
+              <Text
+                style={{
+                  fontSize: 26,
+                  lineHeight: 34,
+                  fontWeight: "800",
+                  height: 34,
+                  fontStyle: "italic",
+                  color: colors.accent,
+                }}
+              >
+                {recordData?.crossed_h3_ids?.length || 0}
+              </Text>
+            </View>
+          </View>
+        </ThemedView>
+        )}
+
+        <RecentAchievements recentAchievements={recentAchievements || []} />
+
+        {/* Desafios */}
+        <View style={styles.challengerContainer}>
+          <ThemedText style={styles.challengeHeader}>
+            Desafio Semanal
+          </ThemedText>
+          <ThemedView
+            style={styles.challengeBannerContainer}
+            lightColor={colors.foreground}
+            darkColor={colors.foreground}
+          >
+            <Image
+              source={require("@/assets/images/login.jpg")}
+              style={styles.challengeBannerImage}
+              contentFit="cover"
+              placeholder="blur"
+            />
+
+            {/* Conteúdo sobreposto */}
+            <View style={styles.challengeContent}>
+              <Text style={styles.challengeTitle}>Meus primeiros 4 KM</Text>
+              <Text style={styles.challengeSubtitle}>
+                Conquiste 20 hexágonos esta semana e ganhe recompensas
+                exclusivas!
+              </Text>
+            </View>
+          </ThemedView>
+        </View>
+
+        {/* <FlatList
+        data={socialData}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <View key={item?.profiles?.username} style={styles.socialItem}>
+            <Text style={styles.username}>{item?.profiles?.username}</Text>
+            <Text>{item.content}</Text>
+          </View>
+        )}
+        // onRefresh={handleRefresh} // Função de refresh
+        // refreshing={refreshing} // Indicador de carregamento de pull-to-refresh
+        // onEndReached={handleLoadMore} // Função de infinite scroll
+        // onEndReachedThreshold={0.5} // Disparar quando chegar a 50% do final da lista
+        ListFooterComponent={loading ? <ActivityIndicator size="small" color={colors.primary} /> : null}
+      /> */}
+
+        {/* <BottomSheet
+          ref={bottomSheetRef}
+          onChange={handleSheetChanges}
+          snapPoints={snapPoints}
+          backgroundStyle={{
+            backgroundColor: isDark ? colors.foreground : colors.background,
+          }}
+          handleIndicatorStyle={{
+            backgroundColor: isDark ? colors.background : colors.background, // ← Altera a cor do tracinho
+          }}
+        >
+          <BottomSheetView
+            style={{
+              backgroundColor: isDark ? colors.foreground : colors.background,
+            }}
+          >
+            <View></View>
+          </BottomSheetView>
+        </BottomSheet> */}
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
-  stepContainer: {
-    gap: 8,
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  container: {
+    gap: 16,
+    padding: 16,
     marginBottom: 8,
+    flex: 1
+  },
+  resumeContainer: {
+    display: "flex",
+    flexDirection: "row",
+    padding: 16,
+    borderRadius: 16,
+  },
+  challengerContainer: {
+    display: "flex",
+    flexDirection: "column",
+    borderRadius: 16,
+  },
+  challengerImage: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+  },
+  recordContainer: {
+    display: "flex",
+    flexDirection: "column",
+    padding: 16,
+    borderRadius: 16,
+    borderColor: colors.primary,
+    borderWidth: 1,
   },
   reactLogo: {
     height: 178,
     width: 290,
     bottom: 0,
     left: 0,
-    position: 'absolute',
+    position: "absolute",
+  },
+  challengeBannerContainer: {
+    height: 160,
+    borderRadius: 16,
+    overflow: "hidden",
+    marginBottom: 16,
+    position: "relative",
+    justifyContent: "flex-end",
+  },
+
+  challengeBannerImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: "100%",
+    height: "100%",
+    borderRadius: 16,
+  },
+
+  challengeContent: {
+    height: "100%",
+    padding: 16,
+    backgroundColor: "rgba(0, 0, 0, 0.5)", // leve escurecimento para contraste
+  },
+
+  challengeHeader: {
+    fontSize: 14,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  challengeTitle: {
+    fontSize: 20,
+    color: colors.accent,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+
+  challengeSubtitle: {
+    fontSize: 14,
+    color: "#fff",
+    marginBottom: 8,
+  },
+
+  challengeButton: {
+    backgroundColor: colors.accent,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+  },
+  socialItem: {
+    marginVertical: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+  },
+  username: {
+    fontWeight: "bold",
+    marginBottom: 5,
   },
 });

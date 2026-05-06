@@ -3,7 +3,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export function CustomTabButton({ children, onPress, accessibilityState, label }) {
   const focused = accessibilityState.selected;
-  console.log({accessibilityState})
   return (
     <TouchableOpacity
       onPress={onPress}
