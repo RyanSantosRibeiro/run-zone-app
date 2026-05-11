@@ -3,22 +3,22 @@ import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { Redirect } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import Input from "@/components/ui/Input";
 import { ThemedView } from "@/components/themed-view";
+import { Alert } from "@/components/ui/Alert";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import Button from "@/components/ui/Button";
-import { colors } from "@/hooks/use-theme-color";
+import { useColors } from "@/hooks/use-theme-color";
 
 export default function Login() {
   const { user, login } = useAuth();
+  const colors = useColors();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -52,7 +52,10 @@ export default function Login() {
 
       {/* Degradê do tema escuro/claro */}
       <LinearGradient
-        colors={["transparent", "#000000cc"]} // você pode trocar #000000cc por #ffffffcc no tema claro, ou usar tema dinâmico
+        colors={[
+          colors.background === "#FFFFFF" ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)",
+          colors.background === "#FFFFFF" ? "rgba(255,255,255,0.9)" : "rgba(0,0,0,0.9)",
+        ]}
         style={styles.gradient}
       />
 
@@ -61,7 +64,10 @@ export default function Login() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.content}
       >
-        <Text style={styles.title}>Entrar</Text>
+        <Text style={[styles.title, { color: colors.foreground }]}>Entrar</Text>
+        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+          Bem-vindo de volta! Faça login para continuar.
+        </Text>
 
         <Input
           placeholder="seu@email.com"
@@ -69,6 +75,15 @@ export default function Login() {
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
+          placeholderTextColor={colors.mutedForeground}
+          style={[
+            styles.input,
+            {
+              backgroundColor: `${colors.foreground}15`,
+              borderColor: `${colors.foreground}25`,
+              color: colors.foreground,
+            },
+          ]}
         />
 
         <Input
@@ -76,17 +91,32 @@ export default function Login() {
           value={password}
           onChangeText={setPassword}
           secureTextEntry
+          placeholderTextColor={colors.mutedForeground}
+          style={[
+            styles.input,
+            {
+              backgroundColor: `${colors.foreground}15`,
+              borderColor: `${colors.foreground}25`,
+              color: colors.foreground,
+            },
+          ]}
         />
 
-        {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
+        <Alert message={errorMsg} />
 
-        <Button title="Entrar" style={styles.button}
+        <Button
+          title="Entrar"
+          style={styles.button}
           onPress={handleLogin}
-          loading={loading}/>
+          loading={loading}
+        />
 
-        <Text style={styles.register}>
+        <Text style={[styles.register, { color: colors.mutedForeground }]}>
           Não tem uma conta?{" "}
-          <Text style={styles.link} onPress={() => console.log("ir para signup")}>
+          <Text
+            style={[styles.link, { color: colors.primary }]}
+            onPress={() => router.push("/signup")}
+          >
             Criar conta
           </Text>
         </Text>
@@ -105,20 +135,22 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    justifyContent: "flex-end", // Empurra para o fim (baixo)
+    justifyContent: "flex-end",
     padding: 24,
-    marginBottom: 200,
+    marginBottom: 100,
   },
   title: {
     fontSize: 28,
     fontWeight: "bold",
-    marginBottom: 24,
+    marginBottom: 6,
     textAlign: "center",
-    color: "#fff",
   },
-  error: {
-    color: "red",
+  subtitle: {
+    fontSize: 14,
     textAlign: "center",
+    marginBottom: 24,
+  },
+  input: {
     marginBottom: 12,
   },
   button: {
@@ -127,18 +159,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 12,
   },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
   register: {
     marginTop: 24,
     textAlign: "center",
-    color: "#ccc",
   },
   link: {
-    color: colors.primary,
     fontWeight: "bold",
   },
 });

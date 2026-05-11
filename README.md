@@ -1,50 +1,33 @@
-# Welcome to your Expo app 👋
+# Run Zone
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+**O Run Zone é, em sua essência, uma ferramenta de performance e saúde.** Nosso objetivo primário é oferecer rastreamento preciso, estatísticas e análises profundas de treinos para corredores. A gamificação (conquista de territórios em hexágonos) atua como uma camada secundária engajadora e divertida, mas construída sobre uma fundação sólida de monitoramento atlético. O projeto tem a visão de bater de frente com o mercado, oferecendo mais valor e diversão. O backend é sustentado pelo Supabase.
 
-## Get started
+## Escopo do MVP
 
-1. Install dependencies
+O Produto Mínimo Viável (MVP) tem como foco as funcionalidades principais que tornam o Run Zone único, unindo rastreamento a gamificação:
+1. **Cadastro e Login de Usuários**: Integração segura e ágil através do Supabase.
+2. **Registro de Corridas**: Monitoramento via GPS (Strava-like) gravando distância, pace, tempo e rota.
+3. **Conquista de Territórios**: Gamificação em background onde cada corrida afeta o controle dos hexágonos do trajeto.
+4. **Sistema de Rede Social Básica**: Usuários podem se seguir mutuamente.
+5. **Ranking Mensal (Temporadas)**: Classificação baseada na performance e conquista territorial do mês.
 
-   ```bash
-   npm install
-   ```
+## Documentação do Projeto
 
-2. Start the app
+Para manter a organização e escalabilidade da aplicação, consulte a pasta `docs/`:
 
-   ```bash
-   npx expo start
-   ```
+- [Guia de Estilos (Identidade Visual & UI/UX)](docs/styleguide.md)
+- [Roadmap e Visão de Futuro (Strava Competitor)](docs/roadmap.md)
+- [Arquitetura e Mecânicas de Jogo (Game Design)](docs/game_design.md)
+- [Checklist de Desenvolvimento (MVP)](docs/checklist.md)
+- [Página: Home](docs/pages/home.md)
+- [Página: Mapa](docs/pages/mapa.md)
+- [Página: Run (Registro de Corrida)](docs/pages/run.md)
+- [Página: Detalhes da Corrida (Análise Pós-Treino)](docs/pages/detalhes_corrida.md)
+- [Página: Ranking](docs/pages/ranking.md)
+- [Página: Usuário (Perfil)](docs/pages/usuario.md)
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Próximos Passos
+- Configuração do mapa interativo e renderização de polígonos/hexágonos.
+- Implementação da biblioteca `h3geo` para conversão de coordenadas e lógica de `upsert` territorial.
+- Setup das tabelas base no Supabase (perfis, corridas, hexágonos).
+- Implementação de permissões de GPS e tracking em background.

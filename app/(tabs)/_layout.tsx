@@ -7,17 +7,14 @@ import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import AntDesign from '@expo/vector-icons/AntDesign';
-import { Colors } from "@/constants/theme";
-import { useColorScheme } from "@/hooks/use-color-scheme";
-import { colors } from "@/hooks/use-theme-color";
+import { useColors } from "@/hooks/use-theme-color";
 import { ThemedText } from "@/components/themed-text";
 import { Image } from "expo-image";
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme == "dark";
-  const { user, loading, isRunning } = useAuth();
-  const router = useRouter()
+  const colors = useColors();
+  const { user, profile, loading } = useAuth();
+  const router = useRouter();
 
   if (loading) {
     return (
@@ -51,7 +48,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={({ route }) => ({
-        tabBarActiveTintColor: isDark ? colors.primary : colors.primaryForeground,
+        tabBarActiveTintColor: colors.primary,
         headerShown: true,
 
         headerLeft: () => (
@@ -83,7 +80,7 @@ export default function TabLayout() {
             
           >
             <TouchableOpacity onPress={() => router.push("/settings")}>
-            {user?.profile?.avatar_url && (
+            {profile?.avatar_url && (
               <Image
                 source={require("@/assets/images/user-icon.jpg")}
                 style={{
@@ -141,8 +138,16 @@ export default function TabLayout() {
           title: "Correr",
           headerTitle: "",
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="figure.run" color={"#2A2A2A"} />
+            <IconSymbol size={28} name="figure.run" color={colors.primaryForeground}  />
           ),
+        }}
+        listeners={{
+          tabPress: (e) => {
+            // Previne a navegação padrão da tab
+            e.preventDefault();
+            // Redireciona manualmente para a stack de corrida
+            router.push("/run");
+          },
         }}
       />
       <Tabs.Screen

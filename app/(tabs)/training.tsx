@@ -1,8 +1,8 @@
 import { Image } from "expo-image";
-import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
+import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { colors } from "@/hooks/use-theme-color";
+import { useColors } from "@/hooks/use-theme-color";
 import { useEffect, useState } from "react";
 
 const treinoData = [
@@ -19,38 +19,37 @@ const categoriaData = [
   { id: "4", title: "HIIT", image: require("@/assets/images/login.jpg"), description: "Treinos de alta intensidade" },
 ];
 
-export default function HistoryScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
+export default function TrainingScreen() {
+  const colors = useColors();
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setLoading(false); // Simulando dados carregados, altere para sua lógica de fetch
+    setLoading(false);
   }, []);
 
   if (loading) {
     return (
       <ThemedView style={styles.center}>
-        <ActivityIndicator size="large" color="#00a86b" />
-        <Text>Carregando treinos...</Text>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ color: colors.foreground }}>Carregando treinos...</Text>
       </ThemedView>
     );
   }
 
   return (
     <ThemedView style={styles.stepContainer}>
-      <ScrollView style={styles.scrollContainer}>
+      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         <ThemedText type="title">Treinos</ThemedText>
 
         {/* Sliders laterais para os treinos */}
-        <Text style={styles.sliderTitle}>Treinos Recentes</Text>
+        <Text style={[styles.sliderTitle, { color: colors.foreground }]}>Treinos Recentes</Text>
         <FlatList
           data={treinoData}
           renderItem={({ item }) => (
             <View key={item.id} style={styles.treinoCardFlat}>
               <Image source={item.image} style={styles.treinoImage} contentFit="cover" placeholder="blur" />
               <View style={styles.treinoContent}>
-                <Text style={styles.treinoTitle}>{item.title}</Text>
+                <Text style={[styles.treinoTitle, { color: colors.primary }]}>{item.title}</Text>
                 <Text style={styles.treinoDescription}>{item.description}</Text>
               </View>
             </View>
@@ -61,19 +60,20 @@ export default function HistoryScreen() {
         />
 
         {/* Lista vertical de categorias de treinos */}
-        <Text style={styles.sliderTitle}>Categorias de Treinos</Text>
+        <Text style={[styles.sliderTitle, { color: colors.foreground }]}>Categorias de Treinos</Text>
         <FlatList
           data={categoriaData}
           renderItem={({ item }) => (
             <View key={item.id} style={styles.categoriaCard}>
               <Image source={item.image} style={styles.categoriaImage} contentFit="cover" placeholder="blur" />
               <View style={styles.categoriaContent}>
-                <Text style={styles.categoriaTitle}>{item.title}</Text>
+                <Text style={[styles.categoriaTitle, { color: colors.primary }]}>{item.title}</Text>
                 <Text style={styles.categoriaDescription}>{item.description}</Text>
               </View>
             </View>
           )}
           keyExtractor={(item) => item.id}
+          scrollEnabled={false}
         />
       </ScrollView>
     </ThemedView>
@@ -83,9 +83,7 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   stepContainer: {
     flex: 1,
-    gap: 20,
     padding: 16,
-    marginBottom: 8,
   },
   scrollContainer: {
     flex: 1,
@@ -108,13 +106,6 @@ const styles = StyleSheet.create({
     width: 250,
     height: 100,
   },
-  treinoCard: {
-    marginRight: 16,
-    borderRadius: 16,
-    overflow: "hidden",
-    width: 250,
-    height: 200,
-  },
   treinoImage: {
     width: "100%",
     height: "100%",
@@ -131,7 +122,6 @@ const styles = StyleSheet.create({
   },
   treinoTitle: {
     fontSize: 18,
-    color: colors.accent,
     fontWeight: "bold",
   },
   treinoDescription: {
@@ -161,7 +151,6 @@ const styles = StyleSheet.create({
   },
   categoriaTitle: {
     fontSize: 24,
-    color: colors.accent,
     fontWeight: "bold",
   },
   categoriaDescription: {

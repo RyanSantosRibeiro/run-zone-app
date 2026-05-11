@@ -1,511 +1,354 @@
 import { Image } from "expo-image";
 import {
   ActivityIndicator,
-  FlatList,
-  Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  useColorScheme,
   View,
 } from "react-native";
-import "react-native-gesture-handler";
-import "react-native-reanimated";
+import { useCallback, useEffect, useState } from "react";
 
-import { HelloWave } from "@/components/hello-wave";
-import ParallaxScrollView from "@/components/parallax-scroll-view";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
-import { Link, router, useNavigation } from "expo-router";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import Button from "@/components/ui/Button";
-import { HeaderTitle } from "@react-navigation/elements";
-import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
-import { colors } from "@/hooks/use-theme-color";
+import { useColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { useAuth } from "@/contexts/AuthContext";
-import Map from "@/components/map";
+import Map from "@/components/shared/Map";
 import { formatTime } from "@/utils/run";
-import RecentAchievements from "@/components/RecentAchievements";
+import RecentAchievements from "@/components/shared/RecentAchievements";
+import type { Run, HexWithOwner } from "@/utils/supabase";
+
+// ─── Tipos ───────────────────────────────────────────────────────────────────
+
+interface HomeData {
+  hexagons: HexWithOwner[];
+  record: Run | null;
+  achievements: unknown[] | null;
+}
+
+// ─── Subcomponentes ───────────────────────────────────────────────────────────
+
+function SectionHeader({ name }: { name: string }) {
+  return (
+    <View style={staticStyles.sectionHeader}>
+      <ThemedText style={staticStyles.sectionHeaderText}>{name}</ThemedText>
+    </View>
+  );
+}
+
+function TerritoryCard({ hexagons, colors }: { hexagons: HexWithOwner[]; colors: ThemeColors }) {
+  const hexCount = hexagons.length;
+  const estimatedCalories = Math.round(70 * 0.2 * hexCount);
+
+  return (
+    <View style={[staticStyles.card, { backgroundColor: colors.card }]}>
+      <View style={staticStyles.territoryInfo}>
+        <Text style={[staticStyles.cardLabel, { color: colors.cardForeground }]}>
+          Território atual
+        </Text>
+        <Text style={[staticStyles.bigNumber, { color: colors.cardForeground }]}>
+          {hexCount}
+        </Text>
+        <Text style={[staticStyles.cardSubLabel, { color: colors.mutedForeground }]}>
+          ~{estimatedCalories} cal conquistadas
+        </Text>
+      </View>
+      <View style={staticStyles.miniMap}>
+        <Map zoom={13} pitch={0} hexagons={hexagons} showUserLocation={false} />
+      </View>
+    </View>
+  );
+}
+
+function RecordCard({ record, colors }: { record: Run; colors: ThemeColors }) {
+  return (
+    <View
+      style={[
+        staticStyles.card,
+        staticStyles.recordCard,
+        { backgroundColor: colors.foreground, borderColor: colors.primary },
+      ]}
+    >
+      <Text style={[staticStyles.cardLabel, { color: colors.background }]}>
+        Melhor corrida
+      </Text>
+      <View style={staticStyles.recordRow}>
+        <RecordStat label="Tempo" value={formatTime(record.duration)} colors={colors} />
+        <RecordStat
+          label="Distância"
+          value={`${Number(record.distance).toFixed(2)} km`}
+          colors={colors}
+        />
+        <RecordStat
+          label="Hexágonos"
+          value={String(record.crossed_h3_ids?.length ?? 0)}
+          colors={colors}
+        />
+      </View>
+    </View>
+  );
+}
+
+function RecordStat({ label, value, colors }: { label: string; value: string; colors: ThemeColors }) {
+  return (
+    <View style={staticStyles.recordStat}>
+      <Text style={[staticStyles.cardSubLabel, { color: colors.background, opacity: 0.6 }]}>
+        {label}
+      </Text>
+      <Text style={[staticStyles.recordValue, { color: colors.background }]}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function WeeklyChallengeBanner() {
+  return (
+    <View style={staticStyles.challengeSection}>
+      <SectionHeader name="Desafio Semanal" />
+      <View style={staticStyles.challengeBanner}>
+        <Image
+          source={require("@/assets/images/login.jpg")}
+          style={StyleSheet.absoluteFillObject}
+          contentFit="cover"
+        />
+        <View style={staticStyles.challengeOverlay}>
+          <Text style={staticStyles.challengeTitle}>Meus primeiros 4 KM</Text>
+          <Text style={staticStyles.challengeSubtitle}>
+            Conquiste 20 hexágonos esta semana e ganhe recompensas exclusivas!
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ─── Tela principal ───────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
-  const colorScheme = useColorScheme();
-  const bottomSheetRef = useRef<BottomSheet>(null);
-  const snapPoints = useMemo(() => ["42%", "60%"], []);
-  const isDark = colorScheme === "dark";
-  const [socialData, setSocialData] = useState<any | null>([]);
-  const [userData, setUserData] = useState<any | null>(null);
-  const [recordData, setRecordData] = useState<any | null>(null);
-  const [recentAchievements, setRecentAchievements] = useState<any | null>([]);
+  const colors = useColors();
+  const { user, profile, fetchUserHex, fetchUserRecord, fetchUserRecentAchievements } = useAuth();
+
+  const [data, setData] = useState<HomeData>({
+    hexagons: [],
+    record: null,
+    achievements: null,
+  });
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false); // Para o pull-to-refresh
-  const [hasMore, setHasMore] = useState(true); // Para controle do infinite scroll
-  const [page, setPage] = useState(1); // Para controle de paginação
+  const [refreshing, setRefreshing] = useState(false);
 
-  const { fetchSocialFeed, fetchUserHex, user, fetchUserRecord, fetchUserRecentAchievements } = useAuth();
+  // ── Carregamento paralelo de todos os dados da home ───────────────────────
 
-  const handleSheetChanges = useCallback((index: number) => {
-    console.log("handleSheetChanges", index);
-  }, []);
-
-  useEffect(() => {
-    
-    const fetchRecentAchievements = async () => {
-      try {
-        setLoading(true);
-        const data = await fetchUserRecentAchievements();
-        setRecentAchievements(data);
-      } catch (error) {
-        console.error("Erro ao buscar dados da corrida", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    const fetchHex = async () => {
-      try {
-        setLoading(true);
-        const data = await fetchUserHex();
-        setUserData(data);
-      } catch (error) {
-        console.error("Erro ao buscar dados da corrida", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    const fetchRecord = async () => {
-      try {
-        setLoading(true);
-        const data = await fetchUserRecord();
-        console.log({ record: data?.crossed_h3_ids?.length });
-        setRecordData(data);
-      } catch (error) {
-        console.error("Erro ao buscar dados da corrida", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchRecord();
-    fetchRecentAchievements();
-    fetchHex();
-  }, [ fetchUserHex, fetchUserRecord, fetchUserRecentAchievements]);
-
-  const fetchSocial = useCallback(async (page:number) => {
+  const loadData = useCallback(async () => {
     try {
-      setLoading(true);
-      const data = await fetchSocialFeed(page);
-      if (data?.length === 0) {
-        setHasMore(false); // Quando não houver mais dados
-      }
-      setSocialData((prev) => [...prev, ...data]);
-    } catch (error) {
-      console.error("Erro ao buscar dados sociais", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      const [hexagons, record, achievements] = await Promise.all([
+        fetchUserHex(),
+        fetchUserRecord(),
+        fetchUserRecentAchievements(),
+      ]);
+
+      setData({
+        hexagons: (hexagons as HexWithOwner[]) ?? [],
+        record: record ?? null,
+        achievements: (achievements as unknown[]) ?? null,
+      });
+    } catch (err) {
+      console.error("[HomeScreen] Erro ao carregar dados:", err);
     }
-  }, [fetchSocialFeed])
-
-  // const handleRefresh = async () => {
-  //   setRefreshing(true);
-  //   setPage(1); // Resetar a página para recarregar tudo
-  //   setSocialData([]); // Limpar os dados antigos
-  //   await fetchSocial(1);
-  // };
-
-  // const handleLoadMore = async () => {
-  //   if (hasMore) {
-  //     setPage((prev) => prev + 1); // Incrementar a página
-  //     await fetchSocial(page + 1); // Carregar mais dados
-  //   }
-  // };
+  }, [fetchUserHex, fetchUserRecord, fetchUserRecentAchievements]);
 
   useEffect(() => {
-    if(socialData?.length <= 0) {
-      fetchSocial(page);
-    }
-  }, [page,fetchSocial,socialData]);
+    setLoading(true);
+    loadData().finally(() => setLoading(false));
+  }, [loadData]);
+
+  // ── Pull-to-refresh ───────────────────────────────────────────────────────
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  }, [loadData]);
+
+  // ── Loading state ─────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <ThemedView style={styles.center}>
-        <ActivityIndicator size="large" color="#00a86b" />
+      <ThemedView style={staticStyles.center}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </ThemedView>
     );
   }
 
+  const displayName = profile?.full_name || profile?.username || user?.email?.split("@")[0] || "";
+
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 200 }}>
-      <ThemedView style={styles.container}>
-        <View
-          style={{
-            paddingVertical: 16,
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          {user && (
-            <>
-              <ThemedText
-                style={{
-                  fontSize: 22,
-                  height: 24,
-                  lineHeight: 24,
-                  fontWeight: "600",
-                }}
-              >
-                Olá, {user?.profile?.full_name || ""}
-              </ThemedText>
-              <ThemedText
-                style={{
-                  fontSize: 12,
-                  height: 14,
-                  lineHeight: 14,
-                  fontWeight: "400",
-                  opacity: 0.5,
-                }}
-              >
-                Pronto para conquistar ?
-              </ThemedText>
-            </>
-          )}
-        </View>
-        {/* Resumo info */}
-        <ThemedView
-          style={styles.resumeContainer}
-          lightColor={colors.accent}
-          darkColor={colors.accentForeground}
-        >
-          <View
-            style={{ width: "50%", display: "flex", flexDirection: "column" }}
-          >
-            <ThemedText
-              style={{ fontSize: 14, fontWeight: "600", opacity: 0.8 }}
-            >
-              Território atual
-            </ThemedText>
-            <ThemedText
-              style={{
-                fontSize: 56,
-                lineHeight: 60,
-                fontWeight: "800",
-                height: 60,
-                fontStyle: "italic",
-              }}
-            >
-              {userData?.length || 0}
-            </ThemedText>
-            <ThemedText
-              style={{ fontSize: 12, opacity: 0.4, height: 14, lineHeight: 14 }}
-            >
-              {70 * 0.2 * userData?.length} calorias até agora
-            </ThemedText>
-          </View>
-          <View
-            style={{
-              width: "50%",
-              display: "flex",
-              flexDirection: "column",
-              height: "100%",
-              borderRadius: 8,
-              overflow: "hidden",
-            }}
-          >
-            <Map
-              zoom={13}
-              pitch={0}
-              hexagons={userData}
-              showUserLocation={false}
-            />
-          </View>
-        </ThemedView>
+    <ScrollView
+      contentContainerStyle={staticStyles.scroll}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
+        />
+      }
+      showsVerticalScrollIndicator={false}
+    >
+      <ThemedView style={staticStyles.container}>
 
-        {/* Record info */}
-        { recordData && (
-          <ThemedView
-          style={styles.recordContainer}
-          lightColor={colors.foreground}
-          darkColor={colors.foreground}
-        >
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "600",
-              opacity: 0.8,
-              color: colors.accent,
-            }}
-          >
-            Recorde Semanal
-          </Text>
-          <View
-            style={{
-              display: "flex",
-              flexDirection: "row",
-              justifyContent: "space-between",
-            }}
-          >
-            <View
-              style={{ width: "45%", display: "flex", flexDirection: "column" }}
-            >
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "600",
-                  opacity: 0.4,
-                  color: colors.accent,
-                }}
-              >
-                Tempo
-              </Text>
-              <Text
-                style={{
-                  fontSize: 26,
-                  lineHeight: 34,
-                  fontWeight: "800",
-                  height: 34,
-                  fontStyle: "italic",
-                  color: colors.accent,
-                }}
-              >
-                {formatTime(recordData?.duration)}
-              </Text>
-            </View>
-            <View
-              style={{ width: "25%", display: "flex", flexDirection: "column" }}
-            >
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "600",
-                  opacity: 0.4,
-                  color: colors.accent,
-                }}
-              >
-                Distância
-              </Text>
-              <Text
-                style={{
-                  fontSize: 26,
-                  lineHeight: 34,
-                  fontWeight: "800",
-                  height: 34,
-                  fontStyle: "italic",
-                  color: colors.accent,
-                }}
-              >
-                {recordData?.distance}
-              </Text>
-            </View>
-            <View
-              style={{ width: "20%", display: "flex", flexDirection: "column" }}
-            >
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "600",
-                  opacity: 0.4,
-                  color: colors.accent,
-                }}
-              >
-                Hexagons
-              </Text>
-              <Text
-                style={{
-                  fontSize: 26,
-                  lineHeight: 34,
-                  fontWeight: "800",
-                  height: 34,
-                  fontStyle: "italic",
-                  color: colors.accent,
-                }}
-              >
-                {recordData?.crossed_h3_ids?.length || 0}
-              </Text>
-            </View>
-          </View>
-        </ThemedView>
-        )}
-
-        <RecentAchievements recentAchievements={recentAchievements || []} />
-
-        {/* Desafios */}
-        <View style={styles.challengerContainer}>
-          <ThemedText style={styles.challengeHeader}>
-            Desafio Semanal
+        {/* Saudação */}
+        <View style={staticStyles.greeting}>
+          <ThemedText style={staticStyles.greetingName}>
+            Olá, {displayName} 👋
           </ThemedText>
-          <ThemedView
-            style={styles.challengeBannerContainer}
-            lightColor={colors.foreground}
-            darkColor={colors.foreground}
-          >
-            <Image
-              source={require("@/assets/images/login.jpg")}
-              style={styles.challengeBannerImage}
-              contentFit="cover"
-              placeholder="blur"
-            />
-
-            {/* Conteúdo sobreposto */}
-            <View style={styles.challengeContent}>
-              <Text style={styles.challengeTitle}>Meus primeiros 4 KM</Text>
-              <Text style={styles.challengeSubtitle}>
-                Conquiste 20 hexágonos esta semana e ganhe recompensas
-                exclusivas!
-              </Text>
-            </View>
-          </ThemedView>
+          <ThemedText style={staticStyles.greetingSubtitle}>
+            Pronto para conquistar território hoje?
+          </ThemedText>
         </View>
 
-        {/* <FlatList
-        data={socialData}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View key={item?.profiles?.username} style={styles.socialItem}>
-            <Text style={styles.username}>{item?.profiles?.username}</Text>
-            <Text>{item.content}</Text>
-          </View>
-        )}
-        // onRefresh={handleRefresh} // Função de refresh
-        // refreshing={refreshing} // Indicador de carregamento de pull-to-refresh
-        // onEndReached={handleLoadMore} // Função de infinite scroll
-        // onEndReachedThreshold={0.5} // Disparar quando chegar a 50% do final da lista
-        ListFooterComponent={loading ? <ActivityIndicator size="small" color={colors.primary} /> : null}
-      /> */}
+        {/* Território */}
+        <TerritoryCard hexagons={data.hexagons} colors={colors} />
 
-        {/* <BottomSheet
-          ref={bottomSheetRef}
-          onChange={handleSheetChanges}
-          snapPoints={snapPoints}
-          backgroundStyle={{
-            backgroundColor: isDark ? colors.foreground : colors.background,
-          }}
-          handleIndicatorStyle={{
-            backgroundColor: isDark ? colors.background : colors.background, // ← Altera a cor do tracinho
-          }}
-        >
-          <BottomSheetView
-            style={{
-              backgroundColor: isDark ? colors.foreground : colors.background,
-            }}
-          >
-            <View></View>
-          </BottomSheetView>
-        </BottomSheet> */}
+        {/* Melhor corrida */}
+        {data.record && <RecordCard record={data.record} colors={colors} />}
+
+        {/* Conquistas recentes */}
+        {data.achievements && data.achievements.length > 0 && (
+          <RecentAchievements recentAchievements={data.achievements} />
+        )}
+
+        {/* Desafio Semanal */}
+        <WeeklyChallengeBanner />
+
       </ThemedView>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
+// ─── Estilos estáticos (não dependem de tema) ─────────────────────────────────
+
+const staticStyles = StyleSheet.create({
   center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
+  scroll: {
+    paddingBottom: 120,
+  },
   container: {
+    flex: 1,
     gap: 16,
     padding: 16,
+  },
+
+  // Saudação
+  greeting: {
+    paddingVertical: 8,
+  },
+  greetingName: {
+    fontSize: 22,
+    fontWeight: "700",
+    lineHeight: 28,
+  },
+  greetingSubtitle: {
+    fontSize: 13,
+    opacity: 0.5,
+    marginTop: 2,
+  },
+
+  // Seção
+  sectionHeader: {
     marginBottom: 8,
-    flex: 1
   },
-  resumeContainer: {
-    display: "flex",
+  sectionHeaderText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+
+  // Card base
+  card: {
+    borderRadius: 16,
+    padding: 16,
     flexDirection: "row",
-    padding: 16,
-    borderRadius: 16,
+    gap: 12,
+    overflow: "hidden",
   },
-  challengerContainer: {
-    display: "flex",
-    flexDirection: "column",
-    borderRadius: 16,
+  cardLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    opacity: 0.7,
+    marginBottom: 4,
   },
-  challengerImage: {
-    position: "absolute",
-    top: 0,
-    left: 0,
+  cardSubLabel: {
+    fontSize: 11,
+    opacity: 0.5,
+    marginTop: 4,
   },
-  recordContainer: {
-    display: "flex",
-    flexDirection: "column",
-    padding: 16,
-    borderRadius: 16,
-    borderColor: colors.primary,
+  bigNumber: {
+    fontSize: 52,
+    fontWeight: "800",
+    fontStyle: "italic",
+    lineHeight: 58,
+  },
+
+  // Território
+  territoryInfo: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  miniMap: {
+    width: "45%",
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+
+  // Record
+  recordCard: {
     borderWidth: 1,
+    flexDirection: "column",
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: "absolute",
+  recordRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 8,
   },
-  challengeBannerContainer: {
+  recordStat: {
+    flexDirection: "column",
+    flex: 1,
+  },
+  recordValue: {
+    fontSize: 24,
+    fontWeight: "800",
+    fontStyle: "italic",
+    lineHeight: 30,
+  },
+
+  // Desafio
+  challengeSection: {
+    gap: 0,
+  },
+  challengeBanner: {
     height: 160,
     borderRadius: 16,
     overflow: "hidden",
-    marginBottom: 16,
     position: "relative",
+  },
+  challengeOverlay: {
+    flex: 1,
+    padding: 16,
+    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
   },
-
-  challengeBannerImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: "100%",
-    height: "100%",
-    borderRadius: 16,
-  },
-
-  challengeContent: {
-    height: "100%",
-    padding: 16,
-    backgroundColor: "rgba(0, 0, 0, 0.5)", // leve escurecimento para contraste
-  },
-
-  challengeHeader: {
-    fontSize: 14,
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
   challengeTitle: {
-    fontSize: 20,
-    color: colors.accent,
+    fontSize: 18,
+    color: "#fff",
     fontWeight: "bold",
     marginBottom: 4,
   },
-
   challengeSubtitle: {
-    fontSize: 14,
-    color: "#fff",
-    marginBottom: 8,
-  },
-
-  challengeButton: {
-    backgroundColor: colors.accent,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignSelf: "flex-start",
-  },
-  socialItem: {
-    marginVertical: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-  },
-  username: {
-    fontWeight: "bold",
-    marginBottom: 5,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.8)",
   },
 });

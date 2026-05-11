@@ -6,11 +6,13 @@ import Fontisto from "@expo/vector-icons/Fontisto";
 import { ThemedView } from "@/components/themed-view";
 import * as Location from "expo-location";
 import { customMapStyle } from "@/styles/Map";
-import Button from "@/components/ui/Button";
+import Button from "@/components/ui/Button";  
 import { useAuth } from "@/contexts/AuthContext";
+import { useRun } from "@/contexts/RunContext";
 import { useNavigation } from "@react-navigation/native";
 import { router } from "expo-router";
-import Map from "@/components/map";
+import Map from "@/components/shared/Map";
+import type { HexWithOwner } from "@/utils/supabase";
 
 export default function ExploreScreen() {
   const [region, setRegion] = useState<{
@@ -23,8 +25,9 @@ export default function ExploreScreen() {
     latitude: number;
     longitude: number;
   } | null>(null); // Estado para armazenar a localização do usuário
-  const { startRun, fetchHexagons, user } = useAuth();
-  const [hexagons, setHexagons] = useState<any | null>(null);
+  const { fetchHexagons, user } = useAuth();
+  const { startRun } = useRun();
+  const [hexagons, setHexagons] = useState<HexWithOwner[] | null>(null);
 
   useEffect(() => {
     if (!navigator) return;

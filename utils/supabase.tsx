@@ -1,79 +1,116 @@
-import { createClient   } from "@supabase/supabase-js";
+import { createClient, SupabaseClient, User } from "@supabase/supabase-js";
+import { Database } from "../types/supabase";
 
-// Define a function to create a Supabase client for client-side operations
-export const createClientBase = () =>
-  createClient(
-    // Pass Supabase URL and anonymous key from the environment to the client
-    "https://axulgeymfpgfivtwwswk.supabase.co",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF4dWxnZXltZnBnZml2dHd3c3drIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1ODQyMjgsImV4cCI6MjA3NDE2MDIyOH0.L1YnF7tuL-Drd2gJcXtqnzo8xXE6yGH1EXRji68e5s4"
+// ─── Singleton do cliente Supabase ──────────────────────────────────────────
+// No Expo, variáveis públicas devem começar com EXPO_PUBLIC_
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn(
+    "[supabase] EXPO_PUBLIC_SUPABASE_URL ou EXPO_PUBLIC_SUPABASE_ANON_KEY não definidos no .env"
   );
-
-// Função para buscar os hexágonos para exibir no mapa
-export async function getHexagons(supabase, user) {
-  // 1. Buscar os hexágonos (cells)
-  const ids = await getFollowingIds(supabase, user.id);
-  console.log({ids})
-
-  const { data: cells, error: cellsError } = await supabase
-    .from("cells")
-    .select("*")
-    .or(`owner_id.eq.${user.id},owner_id.in.(${ids})`);
-
-  
-
-  if (cellsError) {
-    console.error("Erro ao buscar células:", cellsError.message);
-    return [];
-  }
-
-  // 2. Buscar perfis dos donos (apenas os que aparecem nos cells)
-  const ownerIds = [
-    ...new Set(cells?.map((cell) => cell.owner_id).filter(Boolean)),
-  ];
-
-  const { data: owners, error: ownersError } = await supabase
-    .from("profiles")
-    .select("id, username, full_name, color")
-    .in("id", ownerIds);
-
-  if (ownersError) {
-    console.error("Erro ao buscar perfis dos donos:", ownersError.message);
-    return [];
-  }
-
-  // 3. Montar os hexágonos com informações do dono e estilo
-  const hexagons =
-    cells?.map((cell) => {
-      if(!cell) return;
-      // Encontre o dono da célula com base no owner_id
-      const owner = owners?.find((o) => o.id === cell.owner_id);
-      console.log(owner.color)
-
-      // Retorna a estrutura do hexágono com as informações do dono e estilo
-      return {
-        ...cell,
-        owner: owner ? owner.full_name || owner.username : null,
-        color: owner?.color, // Se o dono não tiver cor, usa 'gray'
-        opacity: 0.2 + (cell.hp / cell.max_hp) * 0.8, // Opacidade baseada no HP
-      };
-    }) || [];
-
-  return hexagons;
 }
 
-// Função auxiliar para pegar os IDs das pessoas que o usuário está seguindo
-export async function getFollowingIds(supabase, userId) {
-  const { data: follows, error } = await supabase
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false, // necessário para React Native
+  },
+});
+
+/** @deprecated Use o singleton `supabase` exportado diretamente */
+export const createClientBase = () => supabase;
+
+// ─── Tipos auxiliares ────────────────────────────────────────────────────────
+export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+export type Cell = Database["public"]["Tables"]["cells"]["Row"];
+export type Follow = Database["public"]["Tables"]["follows"]["Row"];
+export type Run = Database["public"]["Tables"]["runs"]["Row"];
+
+export interface HexWithOwner extends Cell {
+  owner: string | null; // full_name ou username
+  color: string | undefined;
+  opacity: number;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Retorna os IDs dos usuários que `userId` segue */
+export async function getFollowingIds(
+  client: SupabaseClient<Database>,
+  userId: string
+): Promise<string[]> {
+  const { data: follows, error } = await client
     .from("follows")
     .select("following_id")
-    .eq("follower_id", userId);
+    .eq("follower_id", userId) as any;
 
   if (error) {
-    console.error("Erro ao buscar usuários seguidos:", error.message);
+    console.error("[getFollowingIds] Erro:", error.message);
     return [];
   }
 
-  console.log({follows})
+  return follows?.map((f) => f.following_id) ?? [];
+}
 
-  return follows?.map((follow) => follow.following_id) || [];
+/**
+ * Busca os hexágonos pertencentes ao usuário e às pessoas que ele segue,
+ * já enriquecidos com dados do dono (nome + cor).
+ */
+export async function getHexagons(
+  client: SupabaseClient<Database>,
+  userId: string
+): Promise<HexWithOwner[]> {
+  // 1. IDs dos seguidos
+  const ids = await getFollowingIds(client, userId);
+
+  // 2. Buscar cells
+  let query = client.from("cells").select("*");
+
+  if (ids.length > 0) {
+    query = query.or(`owner_id.eq.${userId},owner_id.in.(${ids.join(",")})`);
+  } else {
+    query = query.eq("owner_id", userId);
+  }
+
+  const { data: cells, error: cellsError } = await (query as any);
+
+  if (cellsError) {
+    console.error("[getHexagons] Erro ao buscar células:", cellsError.message);
+    return [];
+  }
+
+  if (!cells || cells.length === 0) return [];
+
+  // 3. Buscar perfis dos donos
+  const ownerIds = [
+    ...new Set(
+      cells
+        .map((c) => c.owner_id)
+        .filter((id): id is string => !!id)
+    ),
+  ];
+
+  const { data: owners, error: ownersError } = await client
+    .from("profiles")
+    .select("id, username, full_name, color")
+    .in("id", ownerIds) as any;
+
+  if (ownersError) {
+    console.error("[getHexagons] Erro ao buscar perfis:", ownersError.message);
+    return [];
+  }
+
+  // 4. Montar hexágonos enriquecidos
+  return cells.map((cell): HexWithOwner => {
+    const owner = owners?.find((o) => o.id === cell.owner_id);
+    return {
+      ...cell,
+      owner: owner ? owner.full_name || owner.username : null,
+      color: owner?.color,
+      opacity: 0.2 + (cell.hp / cell.max_hp) * 0.8,
+    };
+  });
 }
