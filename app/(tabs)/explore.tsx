@@ -1,15 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import MapView, { Polygon, PROVIDER_GOOGLE } from "react-native-maps";
-import Fontisto from "@expo/vector-icons/Fontisto";
-
-import { ThemedView } from "@/components/themed-view";
 import * as Location from "expo-location";
-import { customMapStyle } from "@/styles/Map";
+import { ThemedView } from "@/components/themed-view";
 import Button from "@/components/ui/Button";  
 import { useAuth } from "@/contexts/AuthContext";
 import { useRun } from "@/contexts/RunContext";
-import { useNavigation } from "@react-navigation/native";
 import { router } from "expo-router";
 import Map from "@/components/shared/Map";
 import type { HexWithOwner } from "@/utils/supabase";
@@ -27,7 +22,7 @@ export default function ExploreScreen() {
   } | null>(null); // Estado para armazenar a localização do usuário
   const { fetchHexagons, user } = useAuth();
   const { startRun } = useRun();
-  const [hexagons, setHexagons] = useState<HexWithOwner[] | null>(null);
+  const [hexagons, setHexagons] = useState<HexWithOwner[]>([]);
 
   useEffect(() => {
     if (!navigator) return;
@@ -71,7 +66,7 @@ export default function ExploreScreen() {
   useEffect(() => {
     const handleFetchHexagons = async () => {
       const data = await fetchHexagons(); // Chama a função manualmente quando necessário
-      setHexagons(data);
+      setHexagons(data ?? []);
     };
     if (hexagons === null) {
       handleFetchHexagons();
@@ -138,7 +133,7 @@ export default function ExploreScreen() {
       </MapView> */}
 
       <View style={styles.map}>
-              <Map hexagons={hexagons} zoom={hexagons?.length > 20 ? 15 : 16} />
+              <Map hexagons={hexagons ?? []} zoom={hexagons?.length > 20 ? 15 : 16} />
             </View>
 
       {/* Conteúdo flutuando sobre o mapa na parte inferior */}

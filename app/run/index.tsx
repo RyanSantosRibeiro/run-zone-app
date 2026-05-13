@@ -21,6 +21,8 @@ import { router } from "expo-router";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import type { LatLng } from "react-native-maps";
 import { Card } from "@/components/ui/Card";
+import { h3ToGeoBoundary, kRing } from "h3-reactnative";
+import type { HexWithOwner } from "@/utils/supabase";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -67,54 +69,7 @@ function StatBox({ label, value, unit, large = false, colors }: StatBoxProps) {
   );
 }
 
-// ─── Tela de Resumo (pós-corrida) ─────────────────────────────────────────────
-
-interface RunSummaryProps {
-  timer: number;
-  totalDistance: number;
-  lastSpeed: number;
-  conqueredHexes: number;
-  defendedHexes: number;
-  colors: ThemeColors;
-  onShare: () => void;
-  onHome: () => void;
-}
-
-function RunSummary({ timer, totalDistance, lastSpeed, conqueredHexes, defendedHexes, colors, onShare, onHome }: RunSummaryProps) {
-  return (
-    <Animated.View entering={FadeIn.duration(400)} style={staticStyles.summaryContainer}>
-      <ThemedText style={staticStyles.summaryTitle}>🏁 Corrida Finalizada!</ThemedText>
-      <View style={staticStyles.summaryGrid}>
-        <StatBox label="Tempo" value={formatTime(timer)} colors={colors} large />
-        <StatBox label="Distância" value={totalDistance.toFixed(2)} unit="km" colors={colors} large />
-      </View>
-      <View style={staticStyles.summaryGrid}>
-        <StatBox label="Ritmo" value={formatPace(totalDistance, timer)} unit="min/km" colors={colors} />
-        <StatBox label="Vel. média" value={lastSpeed.toFixed(1)} unit="km/h" colors={colors} />
-      </View>
-      <View style={staticStyles.summaryGrid}>
-        <StatBox label="Conquistados" value={conqueredHexes.toString()} colors={colors} />
-        <StatBox label="Defendidos" value={defendedHexes.toString()} colors={colors} />
-      </View>
-
-      <View style={staticStyles.summaryActions}>
-        <Button
-          title="Compartilhar"
-          variant="outline"
-          onPress={onShare}
-          style={{ flex: 1 }}
-          icon={<FontAwesome6 name="share-from-square" size={18} color={colors.primary} />}
-        />
-        <Button
-          title="Voltar ao Início"
-          onPress={onHome}
-          style={{ flex: 1 }}
-          icon={<IconSymbol size={20} name="house.fill" color={colors.primaryForeground} />}
-        />
-      </View>
-    </Animated.View>
-  );
-}
+// RunSummary removido pois a tela de detalhes cuidará de exibir o resumo.
 
 // ─── Controles durante a corrida ──────────────────────────────────────────────
 
@@ -232,7 +187,7 @@ function RunControls({
 export default function RunScreen() {
   const colors = useColors();
   const bottomSheetRef = useRef<BottomSheet>(null);
-  const snapPoints = useMemo(() => ["35%", "55%"], []);
+  const snapPoints = useMemo(() => [], []);
 
   const {
     runData,
@@ -241,6 +196,8 @@ export default function RunScreen() {
     isFinish,
     timer,
     route,
+    crossedH3Ids,
+    currentH3,
     isPaused,
     startRun,
     pauseRun,
@@ -265,13 +222,43 @@ export default function RunScreen() {
     [route]
   );
 
+  const liveHexagons = useMemo(() => {
+    const hexes: HexWithOwner[] = [];
+    if (!isRunning && !isFinish) return hexes;
+
+    // Conquered/Crossed Hexes (highlighted)
+    crossedH3Ids.forEach((h3) => {
+      hexes.push({
+        h3_index: h3,
+        boundary: h3ToGeoBoundary(h3).map(([lat, lng]) => [lng, lat]),
+        color: colors.primary,
+      });
+    });
+
+    // Adjacent Hexes (gray)
+    if (currentH3 && isRunning && !isFinish) {
+      const neighbors = kRing(currentH3, 1);
+      neighbors.forEach((n) => {
+        if (!crossedH3Ids.includes(n)) {
+          hexes.push({
+            h3_index: n,
+            boundary: h3ToGeoBoundary(n).map(([lat, lng]) => [lng, lat]),
+            color: "#808080", // Gray
+          });
+        }
+      });
+    }
+    return hexes;
+  }, [crossedH3Ids, currentH3, colors.primary, isRunning, isFinish]);
+
   // ── Sheet: abrir ao finalizar ───────────────────────────────────────────────
 
   useEffect(() => {
-    if (isFinish) {
-      bottomSheetRef.current?.snapToIndex(1);
+    if (isFinish && runData?.id) {
+      router.replace(`/run/${runData.id}/edit`);
+      setTimeout(() => resetRun(), 500); // Limpa o estado depois da navegação
     }
-  }, [isFinish]);
+  }, [isFinish, runData?.id]);
 
   useEffect(() => {
     if (isRunning) {
@@ -294,17 +281,13 @@ export default function RunScreen() {
     }
   }, []);
 
-  const handleShare = useCallback(() => {
-    console.log("[RunScreen] Compartilhar corrida");
-  }, []);
-
   // ─────────────────────────────────────────────────────────────────────────────
 
   return (
     <ThemedView style={staticStyles.screen}>
       {/* Mapa */}
       <View style={StyleSheet.absoluteFillObject}>
-        <Map pitch={0} route={routeAsLatLng} showUserLocation zoom={16} />
+        <Map pitch={0} route={routeAsLatLng} showUserLocation zoom={16} hexagons={liveHexagons} />
       </View>
 
       {/* Botão voltar */}
@@ -395,18 +378,7 @@ export default function RunScreen() {
         <BottomSheetView
           style={[staticStyles.sheetContent, { backgroundColor: colors.card }]}
         >
-          {isFinish ? (
-            <RunSummary
-              timer={timer}
-              totalDistance={totalDistance}
-              lastSpeed={lastSpeed}
-              conqueredHexes={runData?.conqueredHexes ?? 0}
-              defendedHexes={runData?.defendedHexes ?? 0}
-              colors={colors}
-              onShare={handleShare}
-              onHome={handleHome}
-            />
-          ) : (
+          {!isFinish && (
             <RunControls
               timer={timer}
               totalDistance={totalDistance}
@@ -535,25 +507,5 @@ const staticStyles = StyleSheet.create({
     flex: 1,
   },
 
-  // Summary
-  summaryContainer: {
-    flex: 1,
-    gap: 16,
-  },
-  summaryTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    textAlign: "center",
-    marginBottom: 4,
-  },
-  summaryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  summaryActions: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: "auto",
-  },
+  // Summary styles removidos
 });

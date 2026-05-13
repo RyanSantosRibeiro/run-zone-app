@@ -23,6 +23,7 @@ export function useThemeColor(
 
 const shared = {
   primary: "#B2FF00",
+  primaryLight: "#b8e45348",
   primaryForeground: "#1A1A1A",
 
   destructive: "#D44700",
@@ -45,7 +46,7 @@ export const lightColors = {
   background: "#FFFFFF",
   foreground: "#0A0A0A",
 
-  card: "#FFFFFF",
+  card: "#e6e6e6ff",
   cardForeground: "#0A0A0A",
 
   popover: "#FFFFFF",

@@ -1,3 +1,6 @@
+import { calculateDistance } from "@/utils/run";
+import { supabase } from "@/utils/supabase";
+import * as Location from "expo-location";
 import React, {
   createContext,
   useCallback,
@@ -5,11 +8,9 @@ import React, {
   useRef,
   useState,
 } from "react";
-import * as Location from "expo-location";
-import { calculateDistance } from "@/utils/run";
-import { supabase, type Run } from "@/utils/supabase";
 import { useAuth } from "./AuthContext";
-import { latLngToCell, cellToBoundary } from "h3-js";
+// import { latLngToCell, cellToBoundary } from "h3-js";
+import { geoToH3, h3ToGeoBoundary } from "h3-reactnative";
 
 // ─── Flag de Mock ────────────────────────────────────────────────────────────
 // Mude para `true` para simular uma corrida de ~28 min sem sair do lugar.
@@ -36,6 +37,7 @@ export interface RoutePoint {
   timestamp?: number;
   average_speed?: number;
   distance?: number;
+  altitude?: number;
 }
 
 export interface RunData {
@@ -47,6 +49,7 @@ export interface RunData {
   crossedH3Ids?: string[];
   conqueredHexes?: number;
   defendedHexes?: number;
+  id?: string;
 }
 
 interface RunContextType {
@@ -57,6 +60,8 @@ interface RunContextType {
   isFinish: boolean;
   timer: number;
   route: RoutePoint[];
+  crossedH3Ids: string[];
+  currentH3: string | null;
   // Ações
   startRun: () => void;
   pauseRun: () => void;
@@ -75,12 +80,14 @@ const RunContext = createContext<RunContextType>({
   isFinish: false,
   timer: 0,
   route: [],
-  startRun: () => {},
-  pauseRun: () => {},
-  resumeRun: () => {},
-  stopRun: async () => {},
-  resetRun: () => {},
-  saveRun: async () => {},
+  crossedH3Ids: [],
+  currentH3: null,
+  startRun: () => { },
+  pauseRun: () => { },
+  resumeRun: () => { },
+  stopRun: async () => { },
+  resetRun: () => { },
+  saveRun: async () => { },
 });
 
 // ─── Helpers de geo ──────────────────────────────────────────────────────────
@@ -103,7 +110,7 @@ function movePoint(
 
   const lat2 = Math.asin(
     Math.sin(lat1) * Math.cos(d) +
-      Math.cos(lat1) * Math.sin(d) * Math.cos(brng)
+    Math.cos(lat1) * Math.sin(d) * Math.cos(brng)
   );
   const lng2 =
     lng1 +
@@ -128,6 +135,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const [isFinish, setIsFinish] = useState(false);
   const [runData, setRunData] = useState<RunData | null>(null);
   const [route, setRoute] = useState<RoutePoint[]>([]);
+  const [crossedH3Ids, setCrossedH3Ids] = useState<string[]>([]);
+  const [currentH3, setCurrentH3] = useState<string | null>(null);
   const [timer, setTimer] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const locationWatchRef = useRef<unknown>(null);
@@ -230,6 +239,10 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
 
       const speed = speedKmH + (Math.random() - 0.5) * 3; // variação ±1.5 km/h
 
+      const h3 = geoToH3(currentLat, currentLng, 8);
+      setCurrentH3(h3);
+      setCrossedH3Ids((prev) => (prev.includes(h3) ? prev : [...prev, h3]));
+
       setRoute((prev) => [
         ...prev,
         {
@@ -238,6 +251,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           timestamp: simulatedTimestamp,
           average_speed: Math.max(0, speed),
           distance: distKm,
+          altitude: 700 + (Math.random() - 0.5) * 5, // Mock altitude
         },
       ]);
     }, tickIntervalMs);
@@ -252,6 +266,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     setIsPaused(false);
     setTimer(0);
     setRoute([]);
+    setCrossedH3Ids([]);
+    setCurrentH3(null);
 
     const startTime = new Date();
     setRunData({ startTime, distance: 0, timeElapsed: 0 });
@@ -273,8 +289,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         distanceInterval: 50,
       },
       (loc) => {
-        const { latitude, longitude } = loc.coords;
+        const { latitude, longitude, altitude } = loc.coords;
         const timestamp = Date.now();
+
+        const h3 = geoToH3(latitude, longitude, 8);
+        setCurrentH3(h3);
+        setCrossedH3Ids((prev) => (prev.includes(h3) ? prev : [...prev, h3]));
 
         setRoute((prev) => {
           let average_speed = 0;
@@ -293,7 +313,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
             if (timeHours > 0) average_speed = distanceKm / timeHours;
           }
 
-          return [...prev, { distance: currentDistance, latitude, longitude, timestamp, average_speed }];
+          return [...prev, { distance: currentDistance, latitude, longitude, timestamp, average_speed, altitude: altitude ?? 0 }];
         });
       }
     );
@@ -329,9 +349,16 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   }, [isRunning, isPaused, runData]);
 
   const saveRun = useCallback(async (data: RunData) => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      console.warn("[saveRun] Abortado: user.id não encontrado");
+      return;
+    }
+    
     try {
-      const totalDistance = (data.route ?? []).reduce(
+      console.log("[saveRun] Iniciando salvamento de corrida. User:", user.id);
+      console.log("[saveRun] Pontos na rota:", route?.length);
+
+      const totalDistance = (route ?? []).reduce(
         (acc, pt) => acc + (pt.distance ?? 0),
         0
       );
@@ -340,40 +367,107 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           ? (totalDistance / (data.timeElapsed / 3600))
           : 0;
 
-      const crossedH3Ids = Array.from(
-        new Set((data.route ?? []).map((pt) => latLngToCell(pt.latitude, pt.longitude, 9)))
-      );
+      const crossedH3IdsUnique = Array.from(new Set(crossedH3Ids));
 
-      const { error } = await supabase.from("runs").insert({
+      // Calcula parciais (splits) por km
+      let currentKm = 1;
+      let accumDistanceForSplit = 0;
+      let lastSplitTimestamp = data.startTime.getTime();
+      const splits: { km: number; duration: number; elevation: number }[] = [];
+
+      for (const pt of (route ?? [])) {
+        accumDistanceForSplit += pt.distance ?? 0;
+        
+        if (accumDistanceForSplit >= currentKm) {
+          const ptTimestamp = pt.timestamp ?? Date.now();
+          const splitDurationSeconds = (ptTimestamp - lastSplitTimestamp) / 1000;
+          
+          splits.push({
+            km: currentKm,
+            duration: splitDurationSeconds,
+            elevation: pt.altitude ? Math.floor(pt.altitude) : 0,
+          });
+          
+          lastSplitTimestamp = ptTimestamp;
+          currentKm++;
+        }
+      }
+      
+      console.log(`[saveRun] Splits calculados: ${splits.length}`);
+
+      // Calcula estatísticas avançadas
+      let elevationGain = 0;
+      let maxElevation = 0;
+      let lastAltitude = (route && route.length > 0) ? (route[0].altitude ?? 0) : 0;
+
+      for (const pt of (route ?? [])) {
+        if (pt.altitude !== undefined) {
+          if (pt.altitude > maxElevation) maxElevation = pt.altitude;
+          if (pt.altitude > lastAltitude) {
+            elevationGain += (pt.altitude - lastAltitude);
+          }
+          lastAltitude = pt.altitude;
+        }
+      }
+
+      // Estimações (Mock ou cálculos genéricos para preencher)
+      const stepsCount = Math.floor((data.timeElapsed / 60) * 160); // ~160 passos/min
+      const caloriesBurned = Math.floor(totalDistance * 70); // Fórmula genérica 70kg * km
+
+      console.log(`[saveRun] Estatísticas calculadas - Dist: ${totalDistance.toFixed(2)}km, Tempo: ${data.timeElapsed}s, Ganho Elevação: ${elevationGain}, Passos: ${stepsCount}, Calorias: ${caloriesBurned}`);
+      console.log("[saveRun] Inserindo registro na tabela 'runs'...");
+
+      const { data: insertedRun, error } = await supabase.from("runs").insert({
         user_id: user.id,
         distance: totalDistance,
         duration: data.timeElapsed,
         average_speed: avgSpeed,
         started_at: data.startTime.toISOString(),
         completed_at: data.endTime?.toISOString() ?? new Date().toISOString(),
-        route_data: data.route as unknown as import("@/types/supabase").Json,
-        crossed_h3_ids: crossedH3Ids,
-      } as any);
+        route_data: route as unknown as import("@/types/supabase").Json,
+        crossed_h3_ids: crossedH3IdsUnique,
+        splits: splits,
+        steps: stepsCount,
+        elevation_gain: Math.round(elevationGain),
+        max_elevation: Math.round(maxElevation),
+        calories_burned: caloriesBurned,
+      } as any).select().single() as any;
 
-      if (error) throw error;
+      if (error) {
+        console.error("[saveRun] Erro CRÍTICO ao inserir corrida:", error);
+        throw error;
+      }
+      
+      const runId = insertedRun?.id;
+      console.log("[saveRun] Corrida inserida com sucesso! ID:", runId);
 
       // === Lógica de Conquista de Territórios (H3) ===
       let conquered = 0;
       let defended = 0;
+      
+      console.log(`[saveRun] Processando ${crossedH3IdsUnique.length} territórios únicos (H3)...`);
 
-      if (crossedH3Ids.length > 0) {
+      if (crossedH3IdsUnique.length > 0) {
         const currentMonth = new Date().toISOString().slice(0, 7); // ex: '2026-05'
-        
+
+        console.log("[saveRun] Buscando células H3 existentes...");
         // Busca as células existentes
-        const { data: existingCells } = await (supabase
+        const { data: existingCells, error: fetchCellsError } = await (supabase
           .from("cells")
           .select("*")
-          .in("h3_index", crossedH3Ids) as any);
+          .in("h3_index", crossedH3IdsUnique) as any);
 
-        const cellsToUpsert = crossedH3Ids.map((h3) => {
+        if (fetchCellsError) {
+           console.error("[saveRun] Erro ao buscar células existentes:", fetchCellsError);
+        } else {
+           console.log(`[saveRun] ${existingCells?.length || 0} células já cadastradas encontradas.`);
+        }
+
+        console.log("[saveRun] Preparando Payload para Upsert de Células...");
+        const cellsToUpsert = crossedH3IdsUnique.map((h3) => {
           const existing = existingCells?.find((c) => c.h3_index === h3);
-          const boundary = cellToBoundary(h3).map(([lat, lng]) => [lng, lat]);
-          
+          const boundary = h3ToGeoBoundary(h3).map(([lat, lng]) => [lng, lat]);
+
           let hp = existing?.hp ?? 0;
           let owner = existing?.owner_id ?? user.id;
 
@@ -407,25 +501,29 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
           };
         });
 
+        console.log("[saveRun] Enviando Upsert para a tabela 'cells'...");
         const { error: cellError } = await (supabase
           .from("cells")
           .upsert(cellsToUpsert as any, { onConflict: "h3_index" }) as any);
 
         if (cellError) {
-          console.error("[saveRun] Erro ao atualizar cells:", cellError);
+          console.error("[saveRun] Erro ao atualizar cells no Supabase:", cellError);
+        } else {
+          console.log("[saveRun] Upsert de células concluído sem erros.");
         }
       }
 
-      console.log("[saveRun] Corrida salva com sucesso!");
-      
+      console.log(`[saveRun] Corrida finalizada e salva! Hexágonos Conquistados: ${conquered} | Defendidos: ${defended}`);
+
       // Atualiza o estado com as estatísticas de conquista
-      setRunData(prev => prev ? { 
-        ...prev, 
-        crossedH3Ids, 
-        conqueredHexes: conquered, 
-        defendedHexes: defended 
+      setRunData(prev => prev ? {
+        ...prev,
+        crossedH3Ids: crossedH3IdsUnique,
+        conqueredHexes: conquered,
+        defendedHexes: defended,
+        id: runId
       } : prev);
-      
+
       setIsFinish(true);
     } catch (error) {
       console.error("[saveRun] Erro ao salvar corrida:", error);
@@ -474,6 +572,8 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         isFinish,
         timer,
         route,
+        crossedH3Ids,
+        currentH3,
         startRun,
         pauseRun,
         resumeRun,

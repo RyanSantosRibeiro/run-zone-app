@@ -10,6 +10,14 @@ export default function RunLayout() {
         name="index"
         options={{ title: "Corrida", headerShown: false }}
       />
+      <Stack.Screen
+        name="[run_id]/index"
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="[run_id]/edit"
+        options={{ presentation: "modal", headerShown: false }}
+      />
     </Stack>
   );
 }

@@ -4,7 +4,7 @@ import { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
 import { PlatformPressable, Text } from "@react-navigation/elements";
 import * as Haptics from "expo-haptics";
 import React from "react";
-import { View } from "react-native";
+import { View, Image, StyleSheet } from "react-native";
 
 export function HapticTab(props: BottomTabBarButtonProps & { label?: string }) {
   const { onPressIn, label, children, ...rest } = props;
@@ -39,10 +39,18 @@ export function HapticTab(props: BottomTabBarButtonProps & { label?: string }) {
         paddingHorizontal: 6,
         marginTop: "auto",
         transform: isPrincipal ? [{ translateY: -12 }] : [],
+        overflow: "hidden",
       }}
       accessibilityRole="button"
     >
-      <View>{children}</View>
+      {/* {isPrincipal && (
+        <Image
+          source={require("@/assets/images/lightning(neon).gif")}
+          style={StyleSheet.absoluteFillObject}
+          resizeMode="cover"
+        />
+      )} */}
+      <View style={{ zIndex: 1 }}>{children}</View>
       <Text
         style={{
           fontWeight: 600,
@@ -53,6 +61,7 @@ export function HapticTab(props: BottomTabBarButtonProps & { label?: string }) {
               ? colors.primary
               : colors.mutedForeground,
           lineHeight: 14,
+          zIndex: 1,
         }}
       >
         {label}

@@ -16,6 +16,11 @@ export const unstable_settings = {
   anchor: "(tabs)", // Aqui você define o âncora para as tabs
 };
 
+if (typeof global.document === 'undefined') {
+  // @ts-ignore
+  global.document = {};
+}
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
@@ -39,6 +44,10 @@ export default function RootLayout() {
                 options={{ title: "Corrida", headerShown: false }}
               />
               <Stack.Screen
+                name="profile/edit"
+                options={{ title: "Editar Perfil", presentation: "modal", headerShown: false }}
+              />
+              <Stack.Screen
                 name="login"
                 options={{ title: "Login", headerShown: false }}
               />
@@ -47,11 +56,6 @@ export default function RootLayout() {
                 options={{ title: "Criar conta", headerShown: false }}
               />
 
-              {/* Navegação para a stack de configurações */}
-              <Stack.Screen
-                name="settings"
-                options={{ title: "Configurações", headerShown: false }}
-              />
             </Stack>
             <StatusBar style="auto" />
           </RunProvider>

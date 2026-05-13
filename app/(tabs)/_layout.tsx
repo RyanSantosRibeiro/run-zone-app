@@ -79,7 +79,7 @@ export default function TabLayout() {
             }}
             
           >
-            <TouchableOpacity onPress={() => router.push("/settings")}>
+            <TouchableOpacity onPress={() => router.push("/profile")}>
             {profile?.avatar_url && (
               <Image
                 source={require("@/assets/images/user-icon.jpg")}
