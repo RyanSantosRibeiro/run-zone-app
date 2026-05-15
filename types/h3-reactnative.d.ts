@@ -6,3 +6,6 @@ declare module "h3-reactnative" {
   ): number[][];
   export function kRing(h3Index: string, ringSize: number): string[];
 }
+
+declare module 'fast-text-encoding';
+declare module 'react-native/Libraries/Utilities/PolyfillFunctions';

@@ -232,6 +232,15 @@ export default function RunScreen() {
         h3_index: h3,
         boundary: h3ToGeoBoundary(h3).map(([lat, lng]) => [lng, lat]),
         color: colors.primary,
+        owner: null,
+        opacity: 0,
+        id: 0,
+        owner_id: null,
+        hp: 0,
+        max_hp: 0,
+        season: null,
+        created_at: "",
+        updated_at: ""
       });
     });
 
@@ -243,7 +252,16 @@ export default function RunScreen() {
           hexes.push({
             h3_index: n,
             boundary: h3ToGeoBoundary(n).map(([lat, lng]) => [lng, lat]),
-            color: "#808080", // Gray
+            color: "#808080",
+            owner: null,
+            opacity: 0,
+            id: 0,
+            owner_id: null,
+            hp: 0,
+            max_hp: 0,
+            season: null,
+            created_at: "",
+            updated_at: ""
           });
         }
       });
@@ -509,3 +527,5 @@ const staticStyles = StyleSheet.create({
 
   // Summary styles removidos
 });
+
+

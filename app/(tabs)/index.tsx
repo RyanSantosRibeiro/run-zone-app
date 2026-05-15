@@ -273,7 +273,7 @@ export default function HomeScreen() {
 
         {/* Conquistas recentes */}
         {data.achievements && data.achievements.length > 0 && (
-          <RecentAchievements recentAchievements={data.achievements} />
+          <RecentAchievements recentAchievements={data.achievements as any} />
         )}
 
         {/* Desafio Semanal */}
