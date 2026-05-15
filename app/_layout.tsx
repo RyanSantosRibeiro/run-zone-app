@@ -16,10 +16,8 @@ export const unstable_settings = {
   anchor: "(tabs)", // Aqui você define o âncora para as tabs
 };
 
-if (typeof global.document === 'undefined') {
-  // @ts-ignore
-  global.document = {};
-}
+
+
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();

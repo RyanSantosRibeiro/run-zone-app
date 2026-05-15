@@ -1,8 +1,6 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
-CREATE TYPE public.activity_type AS ENUM ('corrida', 'escalada', 'trilha', 'ciclismo');
-
 CREATE TABLE public.achievements (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   name text NOT NULL UNIQUE,
@@ -16,7 +14,7 @@ CREATE TABLE public.activities (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   user_id uuid NOT NULL,
   title text,
-  activity_type public.activity_type NOT NULL DEFAULT 'corrida',
+  activity_type USER-DEFINED NOT NULL DEFAULT 'corrida'::activity_type,
   distance numeric DEFAULT 0,
   duration integer DEFAULT 0,
   average_speed numeric DEFAULT 0,
@@ -24,14 +22,14 @@ CREATE TABLE public.activities (
   started_at timestamp with time zone,
   completed_at timestamp with time zone,
   route_data jsonb,
-  crossed_h3_ids text[],
-  created_at timestamp with time zone DEFAULT now(),
+  crossed_h3_ids ARRAY,
   steps integer,
   elevation_gain numeric,
   max_elevation numeric,
   splits jsonb,
   perceived_effort integer,
   description text,
+  created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT activities_pkey PRIMARY KEY (id),
   CONSTRAINT activities_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
 );

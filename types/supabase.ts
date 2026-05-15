@@ -6,6 +6,9 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+// Tipos de atividade suportados
+export type ActivityType = 'corrida' | 'escalada' | 'trilha' | 'ciclismo';
+
 export interface Database {
   public: {
     Tables: {
@@ -61,11 +64,12 @@ export interface Database {
           created_at?: string
         }
       }
-      runs: {
+      activities: {
         Row: {
           id: number
           user_id: string
           title: string | null
+          activity_type: ActivityType
           distance: number
           duration: number
           average_speed: number
@@ -75,11 +79,18 @@ export interface Database {
           route_data: Json | null
           crossed_h3_ids: string[] | null
           created_at: string
+          steps: number | null
+          elevation_gain: number | null
+          max_elevation: number | null
+          splits: Json | null
+          perceived_effort: number | null
+          description: string | null
         }
         Insert: {
           id?: number
           user_id: string
           title?: string | null
+          activity_type?: ActivityType
           distance?: number
           duration?: number
           average_speed?: number
@@ -89,11 +100,18 @@ export interface Database {
           route_data?: Json | null
           crossed_h3_ids?: string[] | null
           created_at?: string
+          steps?: number | null
+          elevation_gain?: number | null
+          max_elevation?: number | null
+          splits?: Json | null
+          perceived_effort?: number | null
+          description?: string | null
         }
         Update: {
           id?: number
           user_id?: string
           title?: string | null
+          activity_type?: ActivityType
           distance?: number
           duration?: number
           average_speed?: number
@@ -103,6 +121,12 @@ export interface Database {
           route_data?: Json | null
           crossed_h3_ids?: string[] | null
           created_at?: string
+          steps?: number | null
+          elevation_gain?: number | null
+          max_elevation?: number | null
+          splits?: Json | null
+          perceived_effort?: number | null
+          description?: string | null
         }
       }
       cells: {

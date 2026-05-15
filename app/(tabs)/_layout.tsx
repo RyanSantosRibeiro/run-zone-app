@@ -37,7 +37,7 @@ export default function TabLayout() {
       case "run":
         return "Correr";
       case "training":
-        return "Treino";
+        return "Desafios";
       case "profile":
         return "Perfil";
       default:
@@ -153,7 +153,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="training"
         options={{
-          title: "Treinos",
+          title: "Desafios",
           headerTitle: "",
           tabBarIcon: ({ color }) => (
            <AntDesign name="bars" size={24} color={color} />

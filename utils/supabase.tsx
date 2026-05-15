@@ -27,7 +27,11 @@ export const createClientBase = () => supabase;
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type Cell = Database["public"]["Tables"]["cells"]["Row"];
 export type Follow = Database["public"]["Tables"]["follows"]["Row"];
-export type Run = Database["public"]["Tables"]["runs"]["Row"];
+export type Activity = Database["public"]["Tables"]["activities"]["Row"];
+export type { ActivityType } from "../types/supabase";
+
+/** @deprecated Use `Activity` em vez de `Run` */
+export type Run = Activity;
 
 export interface HexWithOwner extends Cell {
   owner: string | null; // full_name ou username

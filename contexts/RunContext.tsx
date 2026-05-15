@@ -40,7 +40,7 @@ export interface RoutePoint {
   altitude?: number;
 }
 
-export interface RunData {
+export interface ActivityData {
   startTime: Date;
   distance: number;
   timeElapsed: number;
@@ -50,11 +50,15 @@ export interface RunData {
   conqueredHexes?: number;
   defendedHexes?: number;
   id?: string;
+  activityType?: import('@/utils/supabase').ActivityType;
 }
+
+// Alias de retrocompatibilidade
+export type RunData = ActivityData;
 
 interface RunContextType {
   // Estado
-  runData: RunData | null;
+  runData: ActivityData | null;
   isRunning: boolean;
   isPaused: boolean;
   isFinish: boolean;
@@ -62,13 +66,15 @@ interface RunContextType {
   route: RoutePoint[];
   crossedH3Ids: string[];
   currentH3: string | null;
+  activityType: import('@/utils/supabase').ActivityType;
   // Ações
   startRun: () => void;
   pauseRun: () => void;
   resumeRun: () => void;
   stopRun: () => Promise<void>;
   resetRun: () => void;
-  saveRun: (data: RunData) => Promise<void>;
+  saveRun: (data: ActivityData) => Promise<void>;
+  setActivityType: (type: import('@/utils/supabase').ActivityType) => void;
 }
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -82,12 +88,14 @@ const RunContext = createContext<RunContextType>({
   route: [],
   crossedH3Ids: [],
   currentH3: null,
+  activityType: 'corrida',
   startRun: () => { },
   pauseRun: () => { },
   resumeRun: () => { },
   stopRun: async () => { },
   resetRun: () => { },
   saveRun: async () => { },
+  setActivityType: () => { },
 });
 
 // ─── Helpers de geo ──────────────────────────────────────────────────────────
@@ -133,11 +141,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isFinish, setIsFinish] = useState(false);
-  const [runData, setRunData] = useState<RunData | null>(null);
+  const [runData, setRunData] = useState<ActivityData | null>(null);
   const [route, setRoute] = useState<RoutePoint[]>([]);
   const [crossedH3Ids, setCrossedH3Ids] = useState<string[]>([]);
   const [currentH3, setCurrentH3] = useState<string | null>(null);
   const [timer, setTimer] = useState(0);
+  const [activityType, setActivityType] = useState<import('@/utils/supabase').ActivityType>('corrida');
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const locationWatchRef = useRef<unknown>(null);
   const mockIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -348,7 +357,7 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
     }, 1000);
   }, [isRunning, isPaused, runData]);
 
-  const saveRun = useCallback(async (data: RunData) => {
+  const saveRun = useCallback(async (data: ActivityData) => {
     if (!user?.id) {
       console.warn("[saveRun] Abortado: user.id não encontrado");
       return;
@@ -415,10 +424,11 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       const caloriesBurned = Math.floor(totalDistance * 70); // Fórmula genérica 70kg * km
 
       console.log(`[saveRun] Estatísticas calculadas - Dist: ${totalDistance.toFixed(2)}km, Tempo: ${data.timeElapsed}s, Ganho Elevação: ${elevationGain}, Passos: ${stepsCount}, Calorias: ${caloriesBurned}`);
-      console.log("[saveRun] Inserindo registro na tabela 'runs'...");
+      console.log("[saveActivity] Inserindo registro na tabela 'activities'...");
 
-      const { data: insertedRun, error } = await supabase.from("runs").insert({
+      const { data: insertedActivity, error } = await supabase.from("activities").insert({
         user_id: user.id,
+        activity_type: activityType,
         distance: totalDistance,
         duration: data.timeElapsed,
         average_speed: avgSpeed,
@@ -434,12 +444,12 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
       } as any).select().single() as any;
 
       if (error) {
-        console.error("[saveRun] Erro CRÍTICO ao inserir corrida:", error);
+        console.error("[saveActivity] Erro CRÍTICO ao inserir atividade:", error);
         throw error;
       }
       
-      const runId = insertedRun?.id;
-      console.log("[saveRun] Corrida inserida com sucesso! ID:", runId);
+      const runId = insertedActivity?.id;
+      console.log("[saveActivity] Atividade inserida com sucesso! ID:", runId);
 
       // === Lógica de Conquista de Territórios (H3) ===
       let conquered = 0;
@@ -574,12 +584,14 @@ export function RunProvider({ children }: { children: React.ReactNode }) {
         route,
         crossedH3Ids,
         currentH3,
+        activityType,
         startRun,
         pauseRun,
         resumeRun,
         stopRun,
         resetRun,
         saveRun,
+        setActivityType,
       }}
     >
       {children}

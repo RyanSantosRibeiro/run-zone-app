@@ -5,7 +5,10 @@ import React, {
   useState,
 } from "react";
 import type { User, Session } from "@supabase/supabase-js";
-import { supabase, getHexagons, type HexWithOwner, type Profile, type Run } from "@/utils/supabase";
+import { supabase, getHexagons, type HexWithOwner, type Profile, type Activity } from "@/utils/supabase";
+
+// Alias de compatibilidade
+type Run = Activity;
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────
 
@@ -148,7 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user?.id) return;
     try {
       const { data, error } = await supabase
-        .from("runs")
+        .from("activities")
         .select("*")
         .eq("id", Number(run_id))
         .eq("user_id", user.id)
@@ -183,7 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const allUserIds = [user.id, ...followingIds];
 
       const { data: socialRuns, error } = await supabase
-        .from("runs")
+        .from("activities")
         .select(`*, profiles!inner (username, full_name, avatar_url)`)
         .in("user_id", allUserIds)
         .order("created_at", { ascending: false })
@@ -226,12 +229,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user?.id) return;
     try {
       const { data, error } = await supabase
-        .from("runs")
+        .from("activities")
         .select("*")
         .eq("user_id", user.id)
         .order("distance", { ascending: false })
         .limit(1)
-        .single() as any;
+        .maybeSingle() as any;
 
       if (error) throw error;
       return data;
